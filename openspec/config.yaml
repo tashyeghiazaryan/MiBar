@@ -1,0 +1,35 @@
+schema: spec-driven
+
+context: |
+  MiBar is a native SwiftUI iOS app (iOS 17+) for learning one Armenian word a day.
+  Project root: `MiBarApp/` with XcodeGen (`project.yml` → `MiBar.xcodeproj`).
+  Targets: `MiBar` (app) and `MiBarWidget` (WidgetKit extension).
+  Main sources: `MiBar/*.swift`, widget in `MiBarWidget/`.
+  Design reference: `design-reference/` (Figma Make / React) — visual source of truth, not compiled.
+  State today: in-memory `AppModel` (prototype). Auth is email + OTP with prototype code `1111`.
+  Languages for UI: English, Russian, Armenian (`AppLanguage`: en / ru / hy), chosen after OTP.
+  Copy lives in `MiBar/L10n.swift`. Word catalog is static in `MiBar/Models.swift`.
+  Share: system share sheet with a generated story image (`StoryShare.swift`) — user picks destination.
+  Commit style: short imperative sentences (e.g. "Add …", "Fix …").
+
+rules:
+  proposal:
+    - Keep Why / What / Capabilities / Impact
+    - Call out Non-goals when the change is large
+  design:
+    - Document Decisions with alternatives considered
+    - Note iPhone 16 vs 16 Plus / Pro Max layout differences when UI spacing changes
+  tasks:
+    - Prefer phased checklists (onboarding → home → archive → widget → share)
+  specs:
+    - Spec deltas use full requirement text under ## ADDED / ## MODIFIED Requirements
+    - Keep prototype OTP (`1111`) behavior explicit until real auth ships
+
+operations:
+  apply:
+    guidance:
+      - Prefer SwiftUI changes that match design-reference unless the user asks otherwise
+      - Keep frontend copy and L10n in sync when adding UI strings
+  archive:
+    guidance:
+      - Summarize what shipped vs deferred before finishing

@@ -1,0 +1,46 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdata/
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# CocoaPods / Carthage
+Pods/
+Carthage/Build/
+
+# macOS
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+
+# Secrets / local env
+.env
+.env.*
+*.pem
+*.p12
+*.mobileprovision
+Secrets.plist
+**/SupabaseSecrets.plist
+
+# IDEs
+.idea/
+*.swp
+*~
+
+# Cursor local (keep shared skills/commands if committed intentionally)
+# .cursor/ is project OpenSpec tooling — tracked on purpose
