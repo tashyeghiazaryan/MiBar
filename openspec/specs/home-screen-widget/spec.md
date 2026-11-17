@@ -24,9 +24,16 @@ Carousel cards SHALL show a complete border without clipping when a style is sel
 - **WHEN** a widget style card is selected in the carousel
 - **THEN** the full rounded border around that card is visible without top or bottom clipping
 
+### Requirement: App Group sync of today’s word
+The main app SHALL publish today’s word content and selected widget style to a shared App Group store so the WidgetKit extension can display the same word and style.
+
+#### Scenario: Style change updates shared store
+- **WHEN** the user selects a widget style in the in-app sheet
+- **THEN** the shared store is updated with that style and today’s word fields
+
 ### Requirement: WidgetKit extension exists
-The `MiBarWidget` extension SHALL provide configurable styles for the Home Screen. Until sync ships, the extension MAY show placeholder word content independent of in-app catalog updates.
+The `MiBarWidget` extension SHALL read from the App Group store when available and render the configured style (Classic / Soft / Sun / Clear). Clear SHALL use a frosted-glass presentation when the platform supports it.
 
 #### Scenario: Add widget from Home Screen
 - **WHEN** the user adds a MiBar widget from the iOS Home Screen gallery
-- **THEN** a styled word widget appears using one of the configured styles
+- **THEN** a styled word widget appears using the last published style and word data when present
