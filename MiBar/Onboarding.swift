@@ -274,10 +274,77 @@ private func styledLetter(
         .foregroundStyle(Color.brandBlue)
 }
 
+struct WelcomeScreen: View {
+    var onSignUp: () -> Void
+    var onLogIn: () -> Void
+
+    private var isCompact: Bool { ScreenMetrics.isCompactPhone }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            BrandMark(showMark: false, leading: true)
+
+            LetterConstellation()
+                .frame(height: isCompact ? 165 : 180)
+                .padding(.top, isCompact ? 16 : 18)
+                .padding(.bottom, 8)
+
+            Spacer(minLength: isCompact ? 36 : 52)
+
+            Text("One Armenian word\nevery day.")
+                .font(MiBarFont.ui(size: 32, editorial: true))
+                .tracking(-1.0)
+                .lineSpacing(-2)
+                .foregroundStyle(Color.black)
+
+            Text("Discover Armenian in the app or right from your Home Screen widget.")
+                .font(MiBarFont.ui(size: 14))
+                .foregroundStyle(Color.brandBlue)
+                .lineSpacing(5)
+                .padding(.top, isCompact ? 16 : 18)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 24)
+
+            PrimaryButton(title: "Sign Up") {
+                onSignUp()
+            }
+
+            Button(action: onLogIn) {
+                Text("Log in")
+                    .font(MiBarFont.ui(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.navy)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 58)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.navy.opacity(0.18), lineWidth: 1.5)
+                    }
+            }
+            .buttonStyle(MiBarPressStyle())
+            .padding(.top, 12)
+            .accessibilityLabel("Log in")
+
+            Spacer(minLength: 20)
+        }
+        .padding(.horizontal, 30)
+        .padding(.top, isCompact ? 24 : 28)
+        .padding(.bottom, 26)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.paper.ignoresSafeArea())
+    }
+}
+
 struct EmailScreen: View {
     var onContinue: (String) -> Void
+    var onHaveAccount: () -> Void
+    var onBack: () -> Void
     @State private var email = ""
     @State private var touched = false
+    @State private var agreedToTerms = false
+    @State private var showTermsAlert = false
     @State private var isLoading = false
     @State private var keyboardHeight: CGFloat = 0
     @FocusState private var focused: Bool
@@ -334,38 +401,60 @@ struct EmailScreen: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // 3) Logo at the top (scrolls away when keyboard opens)
-                    BrandMark(showMark: false, leading: true)
+                    HStack {
+                        IconButton(icon: .back) {
+                            focused = false
+                            onBack()
+                        }
+                        .accessibilityLabel("Back")
+                        Spacer()
+                        BrandMark(compact: true, showMark: false)
+                        Spacer()
+                        Color.clear.frame(width: 42, height: 42)
+                    }
 
-                    // Compact phones: shrink constellation with keyboard so Continue stays clear
                     LetterConstellation()
                         .frame(height: constellationHeight)
                         .padding(.top, constellationTop)
                         .padding(.bottom, constellationBottom)
 
-                    // Idle: push title → Continue lower on large phones; keyboard: device-tuned stack
                     VStack(alignment: .leading, spacing: 0) {
-                        // 4) New title + blue subtitle
-                        Text("One Armenian word\nevery day.")
+                        Text("Create your account")
                             .font(MiBarFont.ui(size: isCompact && isKeyboardVisible ? 28 : 32, editorial: true))
                             .tracking(-1.0)
                             .lineSpacing(-2)
                             .foregroundStyle(Color.black)
 
-                        Text("Discover Armenian in the app or right from your Home Screen widget.")
+                        Text("Enter your email to get started with one Armenian word every day.")
                             .font(MiBarFont.ui(size: 14))
                             .foregroundStyle(Color.brandBlue)
                             .lineSpacing(5)
                             .padding(.top, subtitleTop)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        // Field + Continue stay in one stack — no overlap
                         emailField
                             .padding(.top, emailFieldTop)
+
+                        termsCheckbox
+                            .padding(.top, 14)
 
                         continueButton
                             .padding(.top, 13)
                             .id("continueButton")
+
+                        Button {
+                            focused = false
+                            onHaveAccount()
+                        } label: {
+                            Text("I already have an account")
+                                .font(MiBarFont.ui(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.navy)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(MiBarPressStyle())
+                        .padding(.top, 6)
+                        .accessibilityLabel("I already have an account")
 
                         if !isKeyboardVisible {
                             Text("Use 1111 for prototype access, or continue with your email.")
@@ -375,7 +464,293 @@ struct EmailScreen: View {
                                 .lineSpacing(2)
                                 .frame(maxWidth: 290)
                                 .frame(maxWidth: .infinity)
-                                .padding(.top, 14)
+                                .padding(.top, 10)
+                        }
+                    }
+                    .padding(.top, formBlockTop)
+                }
+                .padding(.horizontal, 30)
+                .padding(.top, contentTop)
+                .padding(.bottom, 26)
+                .frame(maxWidth: .infinity)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .scrollIndicators(.hidden)
+            .onChange(of: keyboardHeight) { _, height in
+                guard height > 0 else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    withAnimation(.easeOut(duration: 0.28)) {
+                        proxy.scrollTo("continueButton", anchor: .bottom)
+                    }
+                }
+            }
+        }
+        .background(Color.paper.ignoresSafeArea())
+        .padding(.bottom, keyboardHeight)
+        .ignoresSafeArea(.keyboard)
+        .animation(.easeOut(duration: 0.25), value: keyboardHeight)
+        .alert("Terms required", isPresented: $showTermsAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please agree to the Terms of Use to continue.")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            let screenHeight = UIScreen.main.bounds.height
+            keyboardHeight = frame.origin.y >= screenHeight - 1
+                ? 0
+                : max(0, screenHeight - frame.origin.y)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardHeight = 0
+        }
+    }
+
+    private var emailField: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Your email")
+                .font(MiBarFont.ui(size: 11, weight: .semibold))
+                .foregroundStyle(Color.black)
+                .padding(.bottom, 8)
+
+            ZStack(alignment: .leading) {
+                if email.isEmpty {
+                    Text("name@example.com")
+                        .font(MiBarFont.ui(size: 16))
+                        .foregroundStyle(Color.black)
+                        .padding(.horizontal, 16)
+                        .allowsHitTesting(false)
+                }
+                TextField("", text: $email)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                    .textContentType(.emailAddress)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .focused($focused)
+                    .font(MiBarFont.ui(size: 16))
+                    .foregroundStyle(Color.black)
+                    .tint(Color.navy)
+                    .padding(.horizontal, 16)
+            }
+            .frame(height: 56)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(borderColor, lineWidth: 1.5)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { focused = true }
+            .onSubmit { focused = false }
+
+            if touched && !isValid {
+                Text("Enter a valid email address or 1111")
+                    .font(MiBarFont.ui(size: 11))
+                    .foregroundStyle(Color.danger)
+                    .padding(.top, 6)
+                    .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    private var termsCheckbox: some View {
+        Button {
+            agreedToTerms.toggle()
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(agreedToTerms ? Color.navy : Color.white)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(
+                            agreedToTerms ? Color.navy : Color.black.opacity(0.22),
+                            lineWidth: 1.5
+                        )
+                    if agreedToTerms {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.white)
+                    }
+                }
+                .frame(width: 22, height: 22)
+                .padding(.top, 1)
+
+                Text("I agree to the Terms of Use and Privacy Policy")
+                    .font(MiBarFont.ui(size: 13))
+                    .foregroundStyle(Color.black.opacity(0.78))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(agreedToTerms ? [.isSelected] : [])
+        .accessibilityLabel("Agree to the Terms of Use and Privacy Policy")
+    }
+
+    private var continueButton: some View {
+        PrimaryButton(title: "Continue", isLoading: isLoading) {
+            focused = false
+            submit()
+        }
+    }
+
+    private var borderColor: Color {
+        if touched && !isValid { return .danger }
+        if focused { return Color.black.opacity(0.4) }
+        return Color.black.opacity(0.18)
+    }
+
+    private func submit() {
+        touched = true
+        guard isValid else { return }
+        guard agreedToTerms else {
+            showTermsAlert = true
+            return
+        }
+        guard !isLoading else { return }
+        isLoading = true
+        let value = email
+        Task {
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            onContinue(value)
+        }
+    }
+}
+
+struct LoginScreen: View {
+    var onContinue: (String) -> Void
+    var onCreateAccount: () -> Void
+    var onBack: () -> Void
+
+    @State private var email = ""
+    @State private var touched = false
+    @State private var isLoading = false
+    @State private var keyboardHeight: CGFloat = 0
+    @FocusState private var focused: Bool
+
+    private var isValid: Bool {
+        email == "1111" || email.range(
+            of: #"^[^\s@]+@[^\s@]+\.[^\s@]+$"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private var isKeyboardVisible: Bool { keyboardHeight > 0 }
+    private var isCompact: Bool { ScreenMetrics.isCompactPhone }
+
+    private var constellationHeight: CGFloat {
+        if isKeyboardVisible {
+            return isCompact ? 88 : 140
+        }
+        return isCompact ? 165 : 180
+    }
+
+    private var constellationTop: CGFloat {
+        if isKeyboardVisible { return isCompact ? 8 : 12 }
+        return isCompact ? 16 : 18
+    }
+
+    private var constellationBottom: CGFloat {
+        if isKeyboardVisible { return isCompact ? 8 : 14 }
+        return 8
+    }
+
+    private var formBlockTop: CGFloat {
+        guard !isKeyboardVisible else { return 0 }
+        return isCompact ? 58 : 72
+    }
+
+    private var subtitleTop: CGFloat {
+        if isKeyboardVisible { return isCompact ? 12 : 14 }
+        return isCompact ? 16 : 18
+    }
+
+    private var emailFieldTop: CGFloat {
+        if isKeyboardVisible { return isCompact ? 18 : 24 }
+        return isCompact ? 32 : 36
+    }
+
+    private var contentTop: CGFloat {
+        if isKeyboardVisible { return isCompact ? 6 : 8 }
+        return isCompact ? 24 : 28
+    }
+
+    private var borderColor: Color {
+        if touched && !isValid { return .danger }
+        if focused { return Color.black.opacity(0.4) }
+        return Color.black.opacity(0.18)
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        IconButton(icon: .back) {
+                            focused = false
+                            onBack()
+                        }
+                        .accessibilityLabel("Back")
+                        Spacer()
+                        BrandMark(compact: true, showMark: false)
+                        Spacer()
+                        Color.clear.frame(width: 42, height: 42)
+                    }
+
+                    LetterConstellation()
+                        .frame(height: constellationHeight)
+                        .padding(.top, constellationTop)
+                        .padding(.bottom, constellationBottom)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Welcome back")
+                            .font(MiBarFont.ui(size: isCompact && isKeyboardVisible ? 28 : 32, editorial: true))
+                            .tracking(-1.0)
+                            .lineSpacing(-2)
+                            .foregroundStyle(Color.black)
+
+                        Text("Sign in with your email to continue learning Armenian.")
+                            .font(MiBarFont.ui(size: 14))
+                            .foregroundStyle(Color.brandBlue)
+                            .lineSpacing(5)
+                            .padding(.top, subtitleTop)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        emailField
+                            .padding(.top, emailFieldTop)
+
+                        PrimaryButton(title: "Continue", isLoading: isLoading) {
+                            focused = false
+                            submit()
+                        }
+                        .padding(.top, 18)
+                        .id("continueButton")
+
+                        Button {
+                            focused = false
+                            onCreateAccount()
+                        } label: {
+                            Text("Create an account")
+                                .font(MiBarFont.ui(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.navy)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(MiBarPressStyle())
+                        .padding(.top, 6)
+                        .accessibilityLabel("Create an account")
+
+                        if !isKeyboardVisible {
+                            Text("Use 1111 for prototype access, or continue with your email.")
+                                .font(MiBarFont.ui(size: 9))
+                                .foregroundStyle(Color.muted2)
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(2)
+                                .frame(maxWidth: 290)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 10)
                         }
                     }
                     .padding(.top, formBlockTop)
@@ -460,22 +835,10 @@ struct EmailScreen: View {
         }
     }
 
-    private var continueButton: some View {
-        PrimaryButton(title: "Continue", isLoading: isLoading) {
-            focused = false
-            submit()
-        }
-    }
-
-    private var borderColor: Color {
-        if touched && !isValid { return .danger }
-        if focused { return Color.black.opacity(0.4) }
-        return Color.black.opacity(0.18)
-    }
-
     private func submit() {
         touched = true
-        guard isValid, !isLoading else { return }
+        guard isValid else { return }
+        guard !isLoading else { return }
         isLoading = true
         let value = email
         Task {
@@ -562,6 +925,16 @@ struct OtpScreen: View {
                         .frame(minHeight: 40)
                         .padding(.top, 15)
 
+                    PrimaryButton(
+                        title: "Continue",
+                        isLoading: status == .loading,
+                        disabled: code.count < 4 || status == .success
+                    ) {
+                        focused = false
+                        verify(code)
+                    }
+                    .padding(.top, 8)
+
                     Button(action: resend) {
                         Text(resent ? "New code sent" : "Send code again")
                             .font(MiBarFont.ui(size: 11, weight: .semibold))
@@ -569,8 +942,8 @@ struct OtpScreen: View {
                             .opacity(resent ? 0.7 : 1)
                     }
                     .buttonStyle(MiBarPressStyle())
-                    .disabled(resent)
-                    .padding(.top, 8)
+                    .disabled(resent || status == .loading || status == .success)
+                    .padding(.top, 14)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 64)
@@ -689,14 +1062,14 @@ struct OtpScreen: View {
         let filtered = String(raw.filter(\.isNumber).prefix(4))
         if filtered != code {
             code = filtered
-            return
-        }
-        if filtered.count == 4 {
-            verify(filtered)
         }
     }
 
     private func verify(_ value: String) {
+        let filtered = String(value.filter(\.isNumber).prefix(4))
+        guard filtered.count == 4 else { return }
+        guard status != .loading, status != .success else { return }
+
         let ticket = UUID()
         verifyTicket = ticket
         status = .loading
@@ -704,7 +1077,7 @@ struct OtpScreen: View {
         Task {
             try? await Task.sleep(nanoseconds: 700_000_000)
             guard verifyTicket == ticket else { return }
-            if value == "1111" {
+            if filtered == "1111" {
                 status = .success
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 guard verifyTicket == ticket else { return }

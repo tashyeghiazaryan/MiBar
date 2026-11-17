@@ -7,18 +7,27 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		012138E795C40C68CF047CFA /* word-4.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9C9FADDA2EA71C3476F37C23 /* word-4.m4a */; };
 		04CAC3DB0798DBC42A708890 /* NotoSerifArmenian.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 663C76F6F7246BAD2E6601A3 /* NotoSerifArmenian.ttf */; };
+		131C39985E601EAD91675A98 /* word-2.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AD3E413088330BE5BBBD9DDB /* word-2.m4a */; };
 		134183F0EE2AF699F1BA301D /* Outfit.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D626B6D67AAD996760DFE96D /* Outfit.ttf */; };
 		2B681AF446EBBB056F9B6517 /* Onboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D66F87CAEA022A7183787D /* Onboarding.swift */; };
 		34AD8E28AC994036E3A4A29E /* NotoSerifArmenian.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 663C76F6F7246BAD2E6601A3 /* NotoSerifArmenian.ttf */; };
+		38033646AF9FB86ED1BF2C67 /* word-3.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6E90B17300D67B74AFE8AAAB /* word-3.m4a */; };
 		3924F68931EE7B51FA2F6987 /* Outfit.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D626B6D67AAD996760DFE96D /* Outfit.ttf */; };
+		51057B964C6E4D6A838C52D9 /* word-7.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 487DD17603EE92B0B36A9557 /* word-7.m4a */; };
 		572622285D80A36C06BF26F7 /* NotoSansArmenian.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F722E98F741E4279AC814067 /* NotoSansArmenian.ttf */; };
+		6276C4928ABB961553FE0246 /* word-1.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8FA7C7C68763FCF495EB402A /* word-1.m4a */; };
 		66B27C554143A100A0E5F568 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69F460AB230D16E0FF471FAE /* Models.swift */; };
 		8646C4817102C0420A224C03 /* MiBarWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2FC4E6F150B7E3ED9B85A9E6 /* MiBarWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		8922279DACA9B77D854DE74B /* MiBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E42174E14F7177EDFF7739B7 /* MiBarApp.swift */; };
 		8B44AEB4798EAFCC044F41DD /* StoryShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93CAD599BD34C34D885F9476 /* StoryShare.swift */; };
 		94D97825FF4A22318B23BEF8 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FDEE78EC3C2C71EC8B1BF8E /* Theme.swift */; };
+		95338D7D5A7E26BDB4868306 /* word-5.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3A705DDA6E959A3CF40B69C9 /* word-5.m4a */; };
 		9A82DE10A23D7570E8066183 /* MiBarWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 427CBCA07CE5C31AF130E990 /* MiBarWidget.swift */; };
+		9E7EE5F6EE7D7013603D97A4 /* word-6.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F404AC8ECB51B2E0C31DBE5F /* word-6.m4a */; };
+		A7300613B92C95561A24609A /* WidgetDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C791809E38016825204D012 /* WidgetDataStore.swift */; };
+		ADF21E9C27946CDE4F47C031 /* WidgetDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C791809E38016825204D012 /* WidgetDataStore.swift */; };
 		CA50EFA4F9C16D264FB552CB /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7607E14872B751242D0AB061 /* L10n.swift */; };
 		D512038A26B2C3355B3C962D /* MainScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24150292560A77B208425B67 /* MainScreens.swift */; };
 		DCCFE6C9789DEE6B06AD7F1E /* NotoSansArmenian.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F722E98F741E4279AC814067 /* NotoSansArmenian.ttf */; };
@@ -53,19 +62,29 @@
 /* Begin PBXFileReference section */
 		02B925DC055E8ABD35AEC931 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0F4D08492E29EB5E0A4FB5DC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		10A73FB16E9A8FC931CFFA83 /* MiBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MiBar.entitlements; sourceTree = "<group>"; };
 		1EEA25444AFBBA9FFEA38055 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		24150292560A77B208425B67 /* MainScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainScreens.swift; sourceTree = "<group>"; };
+		29BA4E238427D0A667E054E4 /* MiBarWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MiBarWidget.entitlements; sourceTree = "<group>"; };
 		2FC4E6F150B7E3ED9B85A9E6 /* MiBarWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MiBarWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2FDEE78EC3C2C71EC8B1BF8E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		3A705DDA6E959A3CF40B69C9 /* word-5.m4a */ = {isa = PBXFileReference; path = "word-5.m4a"; sourceTree = "<group>"; };
 		427CBCA07CE5C31AF130E990 /* MiBarWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiBarWidget.swift; sourceTree = "<group>"; };
+		487DD17603EE92B0B36A9557 /* word-7.m4a */ = {isa = PBXFileReference; path = "word-7.m4a"; sourceTree = "<group>"; };
 		663C76F6F7246BAD2E6601A3 /* NotoSerifArmenian.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = NotoSerifArmenian.ttf; sourceTree = "<group>"; };
 		69F460AB230D16E0FF471FAE /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		6E90B17300D67B74AFE8AAAB /* word-3.m4a */ = {isa = PBXFileReference; path = "word-3.m4a"; sourceTree = "<group>"; };
 		7607E14872B751242D0AB061 /* L10n.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = L10n.swift; sourceTree = "<group>"; };
+		7C791809E38016825204D012 /* WidgetDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataStore.swift; sourceTree = "<group>"; };
+		8FA7C7C68763FCF495EB402A /* word-1.m4a */ = {isa = PBXFileReference; path = "word-1.m4a"; sourceTree = "<group>"; };
 		93CAD599BD34C34D885F9476 /* StoryShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryShare.swift; sourceTree = "<group>"; };
+		9C9FADDA2EA71C3476F37C23 /* word-4.m4a */ = {isa = PBXFileReference; path = "word-4.m4a"; sourceTree = "<group>"; };
+		AD3E413088330BE5BBBD9DDB /* word-2.m4a */ = {isa = PBXFileReference; path = "word-2.m4a"; sourceTree = "<group>"; };
 		C2D66F87CAEA022A7183787D /* Onboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Onboarding.swift; sourceTree = "<group>"; };
 		D626B6D67AAD996760DFE96D /* Outfit.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Outfit.ttf; sourceTree = "<group>"; };
 		E21D43A990AF1C87638BE23F /* MiBar.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MiBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E42174E14F7177EDFF7739B7 /* MiBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiBarApp.swift; sourceTree = "<group>"; };
+		F404AC8ECB51B2E0C31DBE5F /* word-6.m4a */ = {isa = PBXFileReference; path = "word-6.m4a"; sourceTree = "<group>"; };
 		F722E98F741E4279AC814067 /* NotoSansArmenian.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = NotoSansArmenian.ttf; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -96,14 +115,25 @@
 				1EEA25444AFBBA9FFEA38055 /* ContentView.swift */,
 				7607E14872B751242D0AB061 /* L10n.swift */,
 				24150292560A77B208425B67 /* MainScreens.swift */,
+				10A73FB16E9A8FC931CFFA83 /* MiBar.entitlements */,
 				E42174E14F7177EDFF7739B7 /* MiBarApp.swift */,
 				69F460AB230D16E0FF471FAE /* Models.swift */,
 				C2D66F87CAEA022A7183787D /* Onboarding.swift */,
 				93CAD599BD34C34D885F9476 /* StoryShare.swift */,
 				2FDEE78EC3C2C71EC8B1BF8E /* Theme.swift */,
+				D80EB37EC5412FB660F4F698 /* Audio */,
 				8C147CA2ECC3D477C9959C39 /* Fonts */,
+				BF2D46CA02ACA5D20D35DCA8 /* Shared */,
 			);
 			path = MiBar;
+			sourceTree = "<group>";
+		};
+		BF2D46CA02ACA5D20D35DCA8 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				7C791809E38016825204D012 /* WidgetDataStore.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		CE26D4DF136AC5ECF9A14499 /* Products */ = {
@@ -119,9 +149,24 @@
 			isa = PBXGroup;
 			children = (
 				02B925DC055E8ABD35AEC931 /* Info.plist */,
+				29BA4E238427D0A667E054E4 /* MiBarWidget.entitlements */,
 				427CBCA07CE5C31AF130E990 /* MiBarWidget.swift */,
 			);
 			path = MiBarWidget;
+			sourceTree = "<group>";
+		};
+		D80EB37EC5412FB660F4F698 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				8FA7C7C68763FCF495EB402A /* word-1.m4a */,
+				AD3E413088330BE5BBBD9DDB /* word-2.m4a */,
+				6E90B17300D67B74AFE8AAAB /* word-3.m4a */,
+				9C9FADDA2EA71C3476F37C23 /* word-4.m4a */,
+				3A705DDA6E959A3CF40B69C9 /* word-5.m4a */,
+				F404AC8ECB51B2E0C31DBE5F /* word-6.m4a */,
+				487DD17603EE92B0B36A9557 /* word-7.m4a */,
+			);
+			path = Audio;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -216,6 +261,13 @@
 				572622285D80A36C06BF26F7 /* NotoSansArmenian.ttf in Resources */,
 				04CAC3DB0798DBC42A708890 /* NotoSerifArmenian.ttf in Resources */,
 				134183F0EE2AF699F1BA301D /* Outfit.ttf in Resources */,
+				6276C4928ABB961553FE0246 /* word-1.m4a in Resources */,
+				131C39985E601EAD91675A98 /* word-2.m4a in Resources */,
+				38033646AF9FB86ED1BF2C67 /* word-3.m4a in Resources */,
+				012138E795C40C68CF047CFA /* word-4.m4a in Resources */,
+				95338D7D5A7E26BDB4868306 /* word-5.m4a in Resources */,
+				9E7EE5F6EE7D7013603D97A4 /* word-6.m4a in Resources */,
+				51057B964C6E4D6A838C52D9 /* word-7.m4a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -234,6 +286,7 @@
 				2B681AF446EBBB056F9B6517 /* Onboarding.swift in Sources */,
 				8B44AEB4798EAFCC044F41DD /* StoryShare.swift in Sources */,
 				94D97825FF4A22318B23BEF8 /* Theme.swift in Sources */,
+				A7300613B92C95561A24609A /* WidgetDataStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -242,6 +295,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9A82DE10A23D7570E8066183 /* MiBarWidget.swift in Sources */,
+				ADF21E9C27946CDE4F47C031 /* WidgetDataStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -261,6 +315,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
+				CODE_SIGN_ENTITLEMENTS = MiBar/MiBar.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MiBar/Info.plist;
@@ -352,6 +408,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
+				CODE_SIGN_ENTITLEMENTS = MiBar/MiBar.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MiBar/Info.plist;
@@ -434,6 +492,8 @@
 		7A76586CAFF38B78920B7371 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
+				CODE_SIGN_ENTITLEMENTS = MiBarWidget/MiBarWidget.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MiBarWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -451,6 +511,8 @@
 		E53CF11DCF1B560261BE5AEB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
+				CODE_SIGN_ENTITLEMENTS = MiBarWidget/MiBarWidget.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MiBarWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

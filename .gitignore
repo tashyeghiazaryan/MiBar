@@ -44,3 +44,4 @@ Secrets.plist
 
 # Cursor local (keep shared skills/commands if committed intentionally)
 # .cursor/ is project OpenSpec tooling — tracked on purpose
+.tts-venv/

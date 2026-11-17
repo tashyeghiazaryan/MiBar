@@ -42,50 +42,82 @@ struct MiBarWidgetIntent: WidgetConfigurationIntent {
 struct MiBarEntry: TimelineEntry {
     let date: Date
     let style: MiBarWidgetStyle
+    let snapshot: WidgetDataStore.Snapshot
 }
 
 struct MiBarProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> MiBarEntry {
-        MiBarEntry(date: .now, style: .classic)
+        entry(style: .classic)
     }
 
     func snapshot(for configuration: MiBarWidgetIntent, in context: Context) async -> MiBarEntry {
-        MiBarEntry(date: .now, style: configuration.style)
+        entry(style: configuration.style)
     }
 
     func timeline(for configuration: MiBarWidgetIntent, in context: Context) async -> Timeline<MiBarEntry> {
-        let entry = MiBarEntry(date: .now, style: configuration.style)
+        let item = entry(style: configuration.style)
         let refresh = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now.addingTimeInterval(3600)
-        return Timeline(entries: [entry], policy: .after(refresh))
+        return Timeline(entries: [item], policy: .after(refresh))
+    }
+
+    /// Prefer the style chosen in the app; fall back to the widget configuration.
+    private func entry(style configurationStyle: MiBarWidgetStyle) -> MiBarEntry {
+        let snapshot = WidgetDataStore.load()
+        let style = MiBarWidgetStyle(rawValue: snapshot.style) ?? configurationStyle
+        return MiBarEntry(date: .now, style: style, snapshot: snapshot)
     }
 }
 
 struct MiBarWidgetEntryView: View {
     var style: MiBarWidgetStyle
+    var snapshot: WidgetDataStore.Snapshot
+
+    private var armenian: String { snapshot.armenian }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Word of the day")
+            Text(snapshot.wordOfTheDayTitle)
                 .font(.system(size: 11, weight: .bold))
                 .tracking(0.8)
                 .textCase(.uppercase)
                 .foregroundStyle(kicker)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             Spacer(minLength: 0)
-            Text("Լույս")
-                .font(.custom("Noto Serif Armenian", size: 42).weight(.semibold))
+            Text(armenian)
+                .font(.custom("Noto Serif Armenian", size: wordPointSize).weight(.semibold))
+                .tracking(wordTracking)
                 .foregroundStyle(primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Text("[luys]")
+                .minimumScaleFactor(0.32)
+                .allowsTightening(true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
+            Text("[\(snapshot.transliteration)]")
                 .font(.custom("Outfit", size: 16).italic())
                 .foregroundStyle(meta)
-            Text("light · свет")
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                .allowsTightening(true)
+            Text(snapshot.gloss)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(translation)
                 .lineLimit(2)
+                .minimumScaleFactor(0.65)
+                .allowsTightening(true)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private var wordPointSize: CGFloat {
+        armenian.count >= 10 ? 34 : (armenian.count >= 7 ? 38 : 42)
+    }
+
+    private var wordTracking: CGFloat {
+        if armenian.count >= 10 { return -0.4 }
+        if armenian.count >= 7 { return -0.8 }
+        return -1.2
     }
 
     private var kicker: Color {
@@ -93,22 +125,24 @@ struct MiBarWidgetEntryView: View {
         case .classic: return Color(red: 0.949, green: 0.627, blue: 0.494)
         case .soft: return Color(red: 0.914, green: 0.337, blue: 0.137)
         case .sun: return Color.white.opacity(0.8)
-        case .clear: return Color(red: 0.051, green: 0.094, blue: 0.275).opacity(0.7)
+        case .clear: return Color.primary.opacity(0.62)
         }
     }
 
     private var primary: Color {
         switch style {
         case .classic, .sun: return .white
-        case .soft, .clear: return Color(red: 0.051, green: 0.094, blue: 0.275)
+        case .soft: return Color(red: 0.051, green: 0.094, blue: 0.275)
+        case .clear: return .primary
         }
     }
 
     private var meta: Color {
         switch style {
         case .classic: return Color(red: 0.620, green: 0.753, blue: 0.937)
-        case .soft, .clear: return Color(red: 0.251, green: 0.431, blue: 0.718)
+        case .soft: return Color(red: 0.251, green: 0.431, blue: 0.718)
         case .sun: return Color(red: 1, green: 0.890, blue: 0.831)
+        case .clear: return .secondary
         }
     }
 
@@ -117,7 +151,7 @@ struct MiBarWidgetEntryView: View {
         case .classic: return Color.white.opacity(0.72)
         case .soft: return Color(red: 0.353, green: 0.353, blue: 0.353)
         case .sun: return Color.white.opacity(0.8)
-        case .clear: return Color(red: 0.051, green: 0.094, blue: 0.275).opacity(0.78)
+        case .clear: return Color.primary.opacity(0.72)
         }
     }
 
@@ -131,22 +165,7 @@ struct MiBarWidgetEntryView: View {
         case .sun:
             Color(red: 0.914, green: 0.337, blue: 0.137)
         case .clear:
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.565, green: 0.706, blue: 0.847),
-                        Color(red: 0.851, green: 0.769, blue: 0.659),
-                        Color(red: 0.780, green: 0.627, blue: 0.478),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                LinearGradient(
-                    colors: [Color.white.opacity(0.34), Color.white.opacity(0.14)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
+            Rectangle().fill(.ultraThinMaterial)
         }
     }
 }
@@ -154,7 +173,7 @@ struct MiBarWidgetEntryView: View {
 struct MiBarWordWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "MiBarWord", intent: MiBarWidgetIntent.self, provider: MiBarProvider()) { entry in
-            MiBarWidgetEntryView(style: entry.style)
+            MiBarWidgetEntryView(style: entry.style, snapshot: entry.snapshot)
                 .containerBackground(for: .widget) {
                     MiBarWidgetEntryView.background(for: entry.style)
                 }

@@ -5,9 +5,9 @@ struct MainShell: View {
     @EnvironmentObject private var model: AppModel
     @State private var ready = true
     @State private var showWidget = false
-    @State private var widgetStyle: HomeWidgetStyle = .classic
+    @State private var wordPendingSave: Word?
 
-    private var today: Word { Word.catalog[0] }
+    private var today: Word { model.todayWord }
 
     private var scrollID: String {
         if let detail = model.detail { return "detail-\(detail.id)" }
@@ -21,17 +21,17 @@ struct MainShell: View {
                     if let detail = model.detail {
                         WordFeature(
                             word: detail,
-                            saved: model.savedIDs.contains(detail.id),
+                            saved: model.isSaved(detail.id),
                             isDetail: true,
-                            onToggleSave: { model.toggleSaved(detail.id) },
+                            onToggleSave: { handleSaveTap(for: detail) },
                             onBack: { model.detail = nil }
                         )
                     } else if model.tab == .today {
                         WordFeature(
                             word: today,
-                            saved: model.savedIDs.contains(today.id),
-                            widgetStyle: widgetStyle,
-                            onToggleSave: { model.toggleSaved(today.id) },
+                            saved: model.isSaved(today.id),
+                            widgetStyle: model.widgetStyle,
+                            onToggleSave: { handleSaveTap(for: today) },
                             onChooseWidget: {
                                 withAnimation(.easeOut(duration: 0.28)) { showWidget = true }
                             }
@@ -39,21 +39,15 @@ struct MainShell: View {
                     } else if model.tab == .archive {
                         ScrollView {
                             ArchivePage(
-                                savedIDs: model.savedIDs,
                                 onOpen: { model.open($0) },
-                                onToggleSave: { model.toggleSaved($0) }
+                                onToggleSave: { handleSaveTap(for: $0) }
                             )
                         }
                         .scrollIndicators(.hidden)
                     } else {
-                        ScrollView {
-                            FavoritesPage(
-                                words: model.savedWords,
-                                onOpen: { model.open($0) },
-                                onRemove: { model.toggleSaved($0) }
-                            )
-                        }
-                        .scrollIndicators(.hidden)
+                        FavoritesPage(
+                            onOpen: { model.open($0) }
+                        )
                     }
                 }
                 .id(scrollID)
@@ -67,7 +61,7 @@ struct MainShell: View {
             .offset(y: ready ? 0 : 10)
 
             if showWidget {
-                WidgetStyleSheet(word: today, selected: $widgetStyle) {
+                WidgetStyleSheet(word: today, selected: $model.widgetStyle) {
                     withAnimation(.easeOut(duration: 0.28)) { showWidget = false }
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -86,6 +80,14 @@ struct MainShell: View {
             }
             .ignoresSafeArea()
         }
+        .sheet(item: $wordPendingSave) { word in
+            SaveToFolderSheet(word: word) {
+                wordPendingSave = nil
+            }
+            .environmentObject(model)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .onAppear {
             if model.openWidgetOnLaunch {
                 showWidget = true
@@ -93,6 +95,18 @@ struct MainShell: View {
             }
             guard !ready else { return }
             withAnimation(.easeOut(duration: 0.7)) { ready = true }
+        }
+    }
+
+    private func handleSaveTap(for word: Word) {
+        if model.isSaved(word.id) {
+            model.removeWordFromAllFavorites(word.id)
+            return
+        }
+        if model.favoriteFolders.isEmpty {
+            model.saveWord(word.id, toFolder: nil)
+        } else {
+            wordPendingSave = word
         }
     }
 }
@@ -149,19 +163,62 @@ struct TabBar: View {
     }
 }
 
-final class Speaker: ObservableObject {
-    private let synth = AVSpeechSynthesizer()
+/// Plays recorded Armenian audio from the app bundle (`MiBar/Audio/word-{id}.m4a`).
+final class Speaker: NSObject, ObservableObject, AVAudioPlayerDelegate {
+    private var player: AVAudioPlayer?
+    var onFinished: (() -> Void)?
 
-    func speak(_ text: String) {
-        synth.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "hy-AM")
-        utterance.rate = 0.42
-        synth.speak(utterance)
+    /// Looks for `word-{id}.m4a`, then `.mp3`, then `.caf` in the main bundle / Audio folder.
+    func speak(wordID: Int) {
+        stop()
+        activateSession()
+        guard let url = Self.audioURL(for: wordID) else {
+            finish()
+            return
+        }
+        do {
+            let audio = try AVAudioPlayer(contentsOf: url)
+            audio.delegate = self
+            audio.prepareToPlay()
+            player = audio
+            audio.play()
+        } catch {
+            finish()
+        }
     }
 
     func stop() {
-        synth.stopSpeaking(at: .immediate)
+        player?.stop()
+        player = nil
+    }
+
+    private func finish() {
+        onFinished?()
+    }
+
+    private func activateSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {}
+    }
+
+    static func audioURL(for wordID: Int) -> URL? {
+        let name = "word-\(wordID)"
+        for ext in ["m4a", "mp3", "caf"] {
+            if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Audio") {
+                return url
+            }
+            if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        DispatchQueue.main.async { self.finish() }
     }
 }
 
@@ -179,7 +236,9 @@ struct WordFeature: View {
     @State private var playing = false
     @State private var showScrollHint: Bool
     @State private var showSettings = false
-    @State private var playTask: Task<Void, Never>?
+    @State private var showSupport = false
+    @State private var reopenSettingsAfterSupport = false
+    @State private var showSharePage = false
     @State private var scrollMetrics = ScrollMetrics(minY: 0, height: 0)
     @State private var viewportHeight: CGFloat = 0
 
@@ -265,8 +324,25 @@ struct WordFeature: View {
             }
         }
         .onDisappear {
-            playTask?.cancel()
             speaker.stop()
+        }
+        .overlay {
+            if showSharePage {
+                WordSharePage(
+                    word: word,
+                    language: model.language,
+                    wordsCompleted: Word.catalog.count
+                ) {
+                    withAnimation(.easeOut(duration: 0.28)) {
+                        showSharePage = false
+                    }
+                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
+                .zIndex(40)
+            }
         }
     }
 
@@ -323,35 +399,50 @@ struct WordFeature: View {
         .sheet(isPresented: $showSettings) {
             SettingsSheet(
                 language: $model.language,
+                onOpenSupport: {
+                    reopenSettingsAfterSupport = true
+                    showSettings = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showSupport = true
+                    }
+                },
                 onLogout: {
                     showSettings = false
                     model.logout()
                 }
             )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
+            .environmentObject(model)
+        }
+        .fullScreenCover(isPresented: $showSupport, onDismiss: {
+            guard reopenSettingsAfterSupport else { return }
+            reopenSettingsAfterSupport = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                showSettings = true
+            }
+        }) {
+            SupportSheet(language: model.language)
+                .environmentObject(model)
         }
     }
 
     private var hero: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text(isDetail ? copy.fromTheArchive : copy.wordOfTheDay)
-                    .foregroundStyle(Color.orangeSoft)
-                Text("No. \(word.issueNumber)")
-                    .foregroundStyle(Color.white.opacity(0.5))
-            }
-            .font(MiBarFont.ui(size: 9, weight: .semibold))
-            .tracking(1.44)
-            .textCase(.uppercase)
+            Text(isDetail ? copy.fromTheArchive : copy.wordOfTheDay)
+                .font(MiBarFont.ui(size: 9, weight: .semibold))
+                .tracking(1.44)
+                .textCase(.uppercase)
+                .foregroundStyle(Color.orangeSoft)
 
-            Text(word.armenian)
-                .font(MiBarFont.ui(size: ScreenMetrics.armenianWord, weight: .medium, editorial: true))
-                .tracking(ScreenMetrics.armenianWord * -0.045)
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .padding(.top, 45)
+            AdaptiveArmenianWord(
+                text: word.armenian,
+                size: ScreenMetrics.armenianWord,
+                weight: UIFont.Weight.medium,
+                color: .white,
+                minScale: 0.32,
+                alignment: .center
+            )
+            .padding(.horizontal, 8)
+            .padding(.top, 45)
 
             meta
                 .padding(.top, 22)
@@ -397,13 +488,10 @@ struct WordFeature: View {
                 Text("[\(word.transliteration)]")
                     .font(MiBarFont.ui(size: 19, italic: true, editorial: true))
                     .foregroundStyle(Color.translitBlue)
-                HStack(spacing: 10) {
-                    Text(word.english)
-                    Text("·").foregroundStyle(Color.orangeBrand)
-                    Text(word.russian)
-                }
-                .font(MiBarFont.ui(size: 17, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.82))
+                Text(word.gloss(for: model.language))
+                    .font(MiBarFont.ui(size: 17, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.82))
+                    .multilineTextAlignment(.center)
             }
         }
     }
@@ -416,12 +504,7 @@ struct WordFeature: View {
             Capsule()
                 .fill(Color.white.opacity(0.25))
                 .frame(width: 17, height: 1)
-            Text(word.english)
-                .font(MiBarFont.ui(size: 17, weight: .medium))
-            Text("·")
-                .font(MiBarFont.ui(size: 17, weight: .medium))
-                .foregroundStyle(Color.orangeBrand)
-            Text(word.russian)
+            Text(word.gloss(for: model.language))
                 .font(MiBarFont.ui(size: 17, weight: .medium))
         }
         .foregroundStyle(Color.white.opacity(0.82))
@@ -459,7 +542,9 @@ struct WordFeature: View {
 
     private var shareButton: some View {
         Button {
-            StoryShare.shareWord(word, language: model.language)
+            withAnimation(.easeOut(duration: 0.28)) {
+                showSharePage = true
+            }
         } label: {
             ZStack {
                 Circle().stroke(Color.white.opacity(0.28), lineWidth: 1)
@@ -489,16 +574,10 @@ struct WordFeature: View {
                     .font(MiBarFont.ui(size: 16, italic: true, editorial: true))
                     .foregroundStyle(Color.brandBlue)
                     .padding(.top, 8)
-                Text(primaryPhrase)
+                Text(word.phraseTranslation(for: model.language))
                     .font(MiBarFont.ui(size: 16, weight: .medium))
                     .foregroundStyle(Color.black)
                     .padding(.top, 10)
-                if let secondaryPhrase {
-                    Text(secondaryPhrase)
-                        .font(MiBarFont.ui(size: 16, weight: .medium))
-                        .foregroundStyle(Color.black)
-                        .padding(.top, 4)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -541,21 +620,6 @@ struct WordFeature: View {
         .padding(.horizontal, 25)
     }
 
-    private var primaryPhrase: String {
-        switch model.language {
-        case .ru: return word.phraseRussian
-        case .en, .hy: return word.phraseEnglish
-        }
-    }
-
-    private var secondaryPhrase: String? {
-        switch model.language {
-        case .ru: return word.phraseEnglish
-        case .en: return word.phraseRussian
-        case .hy: return word.phraseRussian
-        }
-    }
-
     private var tomorrow: some View {
         HStack(spacing: 10) {
             Rectangle().fill(Color.line).frame(height: 1)
@@ -572,19 +636,16 @@ struct WordFeature: View {
     }
 
     private func togglePlay() {
-        playTask?.cancel()
         if playing {
             playing = false
             speaker.stop()
             return
         }
         playing = true
-        speaker.speak(word.armenian)
-        playTask = Task {
-            try? await Task.sleep(nanoseconds: 2_300_000_000)
-            guard !Task.isCancelled else { return }
+        speaker.onFinished = {
             playing = false
         }
+        speaker.speak(wordID: word.id)
     }
 }
 
@@ -675,19 +736,27 @@ struct WidgetPreviewCard: View {
                 .textCase(.uppercase)
                 .foregroundStyle(kicker)
             Spacer(minLength: 2)
-            Text(word.armenian)
-                .font(MiBarFont.ui(size: large ? 26 : 22, weight: .semibold, editorial: true))
-                .foregroundStyle(primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            AdaptiveArmenianWord(
+                text: word.armenian,
+                size: large ? 26 : 22,
+                weight: UIFont.Weight.semibold,
+                color: primary,
+                minScale: 0.32,
+                alignment: .leading
+            )
+            .layoutPriority(1)
             Text("[\(word.transliteration)]")
                 .font(MiBarFont.ui(size: large ? 11 : 10, italic: true, editorial: true))
                 .foregroundStyle(meta)
-            Text(model.language == .ru ? "\(word.russian) · \(word.english)" : "\(word.english) · \(word.russian)")
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .allowsTightening(true)
+            Text(word.gloss(for: model.language))
                 .font(MiBarFont.ui(size: large ? 9 : 8, weight: .medium))
                 .foregroundStyle(translation)
                 .lineLimit(2)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.65)
+                .allowsTightening(true)
         }
         .padding(.horizontal, large ? 13 : 10)
         .padding(.vertical, large ? 15 : 12)
@@ -697,10 +766,10 @@ struct WidgetPreviewCard: View {
         .overlay {
             if style == .soft || style == .clear {
                 RoundedRectangle(cornerRadius: large ? 26 : 22, style: .continuous)
-                    .stroke(style == .clear ? Color.white.opacity(0.45) : Color.navy.opacity(0.1), lineWidth: 1)
+                    .stroke(style == .clear ? Color.white.opacity(0.55) : Color.navy.opacity(0.1), lineWidth: 1)
             }
         }
-        .shadow(color: Color.navy.opacity(style == .clear ? 0.12 : 0.18), radius: 12, y: 8)
+        .shadow(color: Color.navy.opacity(style == .clear ? 0.1 : 0.18), radius: style == .clear ? 10 : 12, y: 8)
     }
 
     private var kicker: Color {
@@ -708,22 +777,24 @@ struct WidgetPreviewCard: View {
         case .classic: return .orangeSoft
         case .soft: return .orangeBrand
         case .sun: return Color.white.opacity(0.8)
-        case .clear: return Color.navy.opacity(0.7)
+        case .clear: return Color.primary.opacity(0.62)
         }
     }
 
     private var primary: Color {
         switch style {
         case .classic, .sun: return .white
-        case .soft, .clear: return .navy
+        case .soft: return .navy
+        case .clear: return .primary
         }
     }
 
     private var meta: Color {
         switch style {
         case .classic: return .translitBlue
-        case .soft, .clear: return .brandBlue
+        case .soft: return .brandBlue
         case .sun: return .sunMeta
+        case .clear: return .secondary
         }
     }
 
@@ -732,7 +803,7 @@ struct WidgetPreviewCard: View {
         case .classic: return Color.white.opacity(0.72)
         case .soft: return .inkSoft
         case .sun: return Color.white.opacity(0.8)
-        case .clear: return Color.navy.opacity(0.78)
+        case .clear: return Color.primary.opacity(0.72)
         }
     }
 
@@ -747,16 +818,13 @@ struct WidgetPreviewCard: View {
             Color.orangeBrand
         case .clear:
             ZStack {
+                // Faux wallpaper so frosted glass reads in-app (real widget blurs Home Screen).
                 LinearGradient(
                     colors: [Color(hex: 0x90B4D8), Color(hex: 0xD9C4A8), Color(hex: 0xC7A07A)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                LinearGradient(
-                    colors: [Color.white.opacity(0.34), Color.white.opacity(0.14)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                Rectangle().fill(.ultraThinMaterial)
             }
         }
     }
@@ -1009,9 +1077,8 @@ struct WidgetStyleSheet: View {
 }
 
 struct ArchivePage: View {
-    var savedIDs: [Int]
     var onOpen: (Word) -> Void
-    var onToggleSave: (Int) -> Void
+    var onToggleSave: (Word) -> Void
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
@@ -1060,13 +1127,7 @@ struct ArchivePage: View {
     }
 
     private func wordRow(_ word: Word, isToday: Bool, todayLabel: String) -> some View {
-        let saved = savedIDs.contains(word.id)
-        let gloss: String = {
-            switch model.language {
-            case .ru: return "\(word.russian) · \(word.english)"
-            case .en, .hy: return "\(word.english) · \(word.russian)"
-            }
-        }()
+        let saved = model.isSaved(word.id)
         return HStack(spacing: 0) {
             Button {
                 onOpen(word)
@@ -1081,7 +1142,7 @@ struct ArchivePage: View {
                             .font(MiBarFont.ui(size: 21, weight: .semibold, editorial: true))
                             .foregroundStyle(Color.black)
                             .lineLimit(1)
-                        Text(gloss)
+                        Text(word.gloss(for: model.language))
                             .font(MiBarFont.ui(size: 12))
                             .foregroundStyle(Color.brandBlue)
                             .lineLimit(1)
@@ -1097,7 +1158,7 @@ struct ArchivePage: View {
             .accessibilityLabel("Open \(word.armenian)")
 
             Button {
-                onToggleSave(word.id)
+                onToggleSave(word)
             } label: {
                 MiBarIconView(name: saved ? .bookmarked : .bookmark, size: 19)
                     .foregroundStyle(Color.black)
@@ -1125,53 +1186,208 @@ struct ArchivePage: View {
 }
 
 struct FavoritesPage: View {
-    var words: [Word]
     var onOpen: (Word) -> Void
-    var onRemove: (Int) -> Void
     @EnvironmentObject private var model: AppModel
+    @State private var openedFolderID: UUID?
+    @State private var showCreateFolder = false
+    @State private var newFolderName = ""
+
+    private var copy: L10n { model.language.copy }
+    private var generalWords: [Word] { model.savedWords }
+    private var folders: [FavoriteFolder] { model.sortedFavoriteFolders }
 
     var body: some View {
-        let copy = model.language.copy
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top) {
+        NavigationStack {
+            ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Kicker(text: copy.favoritesKicker)
-                    Text(copy.favoritesTitle)
-                        .font(MiBarFont.ui(size: 41, editorial: true))
-                        .tracking(-1.64)
-                        .foregroundStyle(Color.black)
-                        .padding(.top, 9)
-                }
-                Spacer()
-                if !words.isEmpty {
-                    countBlock(value: words.count, label: copy.savedCountLabel)
-                }
-            }
+                    header
 
-            if words.isEmpty {
-                EmptyFavorites(copy: copy)
-            } else {
-                VStack(spacing: 11) {
-                    ForEach(words) { word in
-                        favoriteCard(word)
+                    if !folders.isEmpty {
+                        Text(copy.collectionsLabel)
+                            .font(MiBarFont.ui(size: 11, weight: .bold))
+                            .tracking(1.1)
+                            .textCase(.uppercase)
+                            .foregroundStyle(Color.brandBlue)
+                            .padding(.top, 28)
+
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.flexible(), spacing: 8),
+                                GridItem(.flexible(), spacing: 8),
+                                GridItem(.flexible(), spacing: 8),
+                            ],
+                            spacing: 8
+                        ) {
+                            ForEach(folders) { folder in
+                                Button {
+                                    openedFolderID = folder.id
+                                } label: {
+                                    folderSquare(folder)
+                                }
+                                .buttonStyle(MiBarPressStyle())
+                            }
+                        }
+                        .padding(.top, 12)
+                    }
+
+                    Text(copy.generalCollection)
+                        .font(MiBarFont.ui(size: 11, weight: .bold))
+                        .tracking(1.1)
+                        .textCase(.uppercase)
+                        .foregroundStyle(Color.brandBlue)
+                        .padding(.top, 28)
+
+                    if generalWords.isEmpty && folders.isEmpty {
+                        EmptyFavorites(copy: copy)
+                            .padding(.top, 8)
+                    } else if generalWords.isEmpty {
+                        Text(copy.emptyCollectionBody)
+                            .font(MiBarFont.ui(size: 14))
+                            .foregroundStyle(Color.inkSoft)
+                            .padding(.top, 14)
+                    } else {
+                        VStack(spacing: 11) {
+                            ForEach(generalWords) { word in
+                                favoriteCard(word, folderID: nil)
+                            }
+                        }
+                        .padding(.top, 14)
                     }
                 }
-                .padding(.top, 37)
+                .padding(.horizontal, 25)
+                .padding(.top, 20)
+                .padding(.bottom, 26)
             }
+            .scrollIndicators(.hidden)
+            .background(Color.paper.ignoresSafeArea())
+            .navigationBarHidden(true)
+            .navigationDestination(item: $openedFolderID) { folderID in
+                FavoriteFolderDetail(
+                    folderID: folderID,
+                    onOpen: onOpen
+                )
+                .environmentObject(model)
+            }
+            .overlay {
+                if showCreateFolder {
+                    CreateCollectionModal(
+                        name: $newFolderName,
+                        copy: copy,
+                        onCancel: {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                showCreateFolder = false
+                            }
+                            newFolderName = ""
+                        },
+                        onCreate: {
+                            let createdID = model.createFavoriteFolder(name: newFolderName)
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                showCreateFolder = false
+                            }
+                            newFolderName = ""
+                            if let createdID {
+                                openedFolderID = createdID
+                            }
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    .zIndex(10)
+                }
+            }
+            .animation(.easeOut(duration: 0.22), value: showCreateFolder)
         }
-        .padding(.horizontal, 25)
-        .padding(.top, 20)
-        .padding(.bottom, 26)
     }
 
-    private func favoriteCard(_ word: Word) -> some View {
-        let gloss: String = {
-            switch model.language {
-            case .ru: return "\(word.russian) · \(word.english)"
-            case .en, .hy: return "\(word.english) · \(word.russian)"
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 0) {
+                Kicker(text: copy.favoritesKicker)
+                Text(copy.favoritesTitle)
+                    .font(MiBarFont.ui(size: 41, editorial: true))
+                    .tracking(-1.64)
+                    .foregroundStyle(Color.black)
+                    .padding(.top, 9)
             }
-        }()
-        return HStack(alignment: .top, spacing: 8) {
+            Spacer(minLength: 12)
+            HStack(alignment: .center, spacing: 10) {
+                Button {
+                    newFolderName = ""
+                    withAnimation(.easeOut(duration: 0.22)) {
+                        showCreateFolder = true
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(copy.createCollection)
+                            .font(MiBarFont.ui(size: 11, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .foregroundStyle(Color.navy)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color.white)
+                    .clipShape(Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(Color.navy.opacity(0.18), lineWidth: 1.2)
+                    }
+                }
+                .buttonStyle(MiBarPressStyle())
+                .accessibilityLabel(copy.createCollection)
+
+                if model.allFavoriteCount > 0 {
+                    countBlock(value: model.allFavoriteCount, label: copy.savedCountLabel)
+                }
+            }
+            .padding(.top, 10)
+        }
+    }
+
+    private func folderSquare(_ folder: FavoriteFolder) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.55))
+            }
+
+            Spacer(minLength: 0)
+
+            Text(folder.name)
+                .font(MiBarFont.ui(size: 14, weight: .semibold, editorial: true))
+                .tracking(-0.3)
+                .foregroundStyle(Color.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+                .multilineTextAlignment(.leading)
+
+            Text("\(folder.wordIDs.count)")
+                .font(MiBarFont.ui(size: 10, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.75))
+                .padding(.top, 4)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .aspectRatio(1, contentMode: .fit)
+        .background(Color.collectionCard)
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 3,
+                bottomLeadingRadius: 3,
+                bottomTrailingRadius: 3,
+                topTrailingRadius: 16
+            )
+        )
+    }
+
+    private func favoriteCard(_ word: Word, folderID: UUID?) -> some View {
+        HStack(alignment: .top, spacing: 8) {
             Button {
                 onOpen(word)
             } label: {
@@ -1182,10 +1398,17 @@ struct FavoritesPage: View {
                     Text(word.armenian)
                         .font(MiBarFont.ui(size: 31, weight: .semibold, editorial: true))
                         .padding(.top, 9)
-                    Text(gloss)
-                        .font(MiBarFont.ui(size: 13))
-                        .opacity(0.85)
-                        .padding(.top, 8)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("[\(word.transliteration)]")
+                            .font(MiBarFont.ui(size: 11, italic: true, editorial: true))
+                            .opacity(0.7)
+                        Text(word.gloss(for: model.language))
+                            .font(MiBarFont.ui(size: 13))
+                            .opacity(0.85)
+                    }
+                    .padding(.top, 8)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -1194,7 +1417,7 @@ struct FavoritesPage: View {
             .accessibilityLabel("Open \(word.armenian)")
 
             Button {
-                onRemove(word.id)
+                model.removeWord(word.id, fromFolder: folderID)
             } label: {
                 MiBarIconView(name: .close, size: 18)
                     .frame(width: 34, height: 34)
@@ -1216,6 +1439,338 @@ struct FavoritesPage: View {
                 topTrailingRadius: 24
             )
         )
+    }
+}
+
+private struct CreateCollectionModal: View {
+    @Binding var name: String
+    var copy: L10n
+    var onCancel: () -> Void
+    var onCreate: () -> Void
+
+    @FocusState private var focused: Bool
+
+    private var canCreate: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        ZStack {
+            Color.navy.opacity(0.42)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    focused = false
+                    onCancel()
+                }
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(copy.collectionsLabel)
+                    .font(MiBarFont.ui(size: 11, weight: .bold))
+                    .tracking(1.1)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Color.brandBlue)
+
+                Text(copy.createCollectionTitle)
+                    .font(MiBarFont.ui(size: 28, weight: .semibold, editorial: true))
+                    .tracking(-0.7)
+                    .foregroundStyle(Color.black)
+                    .padding(.top, 8)
+
+                TextField(copy.collectionNamePlaceholder, text: $name)
+                    .font(MiBarFont.ui(size: 17, weight: .medium))
+                    .foregroundStyle(Color.black)
+                    .focused($focused)
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        guard canCreate else { return }
+                        onCreate()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 14)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(
+                                focused ? Color.navy.opacity(0.35) : Color.black.opacity(0.1),
+                                lineWidth: 1.5
+                            )
+                    }
+                    .padding(.top, 22)
+
+                HStack(spacing: 10) {
+                    Button(action: onCancel) {
+                        Text(copy.cancel)
+                            .font(MiBarFont.ui(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.navy)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.navy.opacity(0.18), lineWidth: 1.5)
+                            }
+                    }
+                    .buttonStyle(MiBarPressStyle())
+
+                    Button(action: onCreate) {
+                        Text(copy.createCollectionConfirm)
+                            .font(MiBarFont.ui(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(canCreate ? Color.orangeBrand : Color.navy.opacity(0.25))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(MiBarPressStyle())
+                    .disabled(!canCreate)
+                }
+                .padding(.top, 16)
+            }
+            .padding(22)
+            .frame(maxWidth: 340)
+            .background(Color.paper)
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 8,
+                    bottomLeadingRadius: 8,
+                    bottomTrailingRadius: 8,
+                    topTrailingRadius: 28
+                )
+            )
+            .shadow(color: Color.navy.opacity(0.22), radius: 28, y: 14)
+            .padding(.horizontal, 28)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    focused = true
+                }
+            }
+        }
+    }
+}
+
+struct FavoriteFolderDetail: View {
+    var folderID: UUID
+    var onOpen: (Word) -> Void
+
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    private var copy: L10n { model.language.copy }
+
+    private var folder: FavoriteFolder? {
+        model.favoriteFolders.first(where: { $0.id == folderID })
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center) {
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(copy.back)
+                            .font(MiBarFont.ui(size: 14, weight: .medium))
+                    }
+                    .foregroundStyle(Color.navy.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 8)
+
+                Text(folder?.name ?? copy.collectionsLabel)
+                    .font(MiBarFont.ui(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.black)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+                Color.clear.frame(width: 72, height: 1)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 11) {
+                    if let folder, !folder.words.isEmpty {
+                        ForEach(folder.words) { word in
+                            favoriteDetailCard(word)
+                        }
+                    } else {
+                        Text(copy.emptyCollectionBody)
+                            .font(MiBarFont.ui(size: 14))
+                            .foregroundStyle(Color.inkSoft)
+                            .padding(.top, 24)
+                    }
+                }
+                .padding(.horizontal, 25)
+                .padding(.bottom, 28)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.paper.ignoresSafeArea())
+        .navigationBarHidden(true)
+    }
+
+    private func favoriteDetailCard(_ word: Word) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Button {
+                onOpen(word)
+            } label: {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(word.pos.localizedTitle(for: model.language))
+                        .font(MiBarFont.ui(size: 11, weight: .semibold))
+                        .opacity(0.85)
+                    Text(word.armenian)
+                        .font(MiBarFont.ui(size: 31, weight: .semibold, editorial: true))
+                        .padding(.top, 9)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("[\(word.transliteration)]")
+                            .font(MiBarFont.ui(size: 11, italic: true, editorial: true))
+                            .opacity(0.7)
+                        Text(word.gloss(for: model.language))
+                            .font(MiBarFont.ui(size: 13))
+                            .opacity(0.85)
+                    }
+                    .padding(.top, 8)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(MiBarPressStyle())
+
+            Button {
+                model.removeWord(word.id, fromFolder: folderID)
+            } label: {
+                MiBarIconView(name: .close, size: 18)
+                    .frame(width: 34, height: 34)
+            }
+            .buttonStyle(MiBarPressStyle())
+        }
+        .padding(.leading, 20)
+        .padding(.trailing, 15)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, minHeight: 116, alignment: .top)
+        .foregroundStyle(word.pos.foreground)
+        .background(word.pos.background)
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 4,
+                bottomLeadingRadius: 4,
+                bottomTrailingRadius: 4,
+                topTrailingRadius: 24
+            )
+        )
+    }
+}
+
+struct SaveToFolderSheet: View {
+    var word: Word
+    var onDone: () -> Void
+
+    @EnvironmentObject private var model: AppModel
+
+    private var copy: L10n { model.language.copy }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Capsule()
+                .fill(Color.navy.opacity(0.14))
+                .frame(width: 42, height: 4)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 10)
+                .padding(.bottom, 18)
+
+            Text(copy.saveToTitle)
+                .font(MiBarFont.ui(size: 13, weight: .bold))
+                .tracking(1.0)
+                .textCase(.uppercase)
+                .foregroundStyle(Color.brandBlue)
+
+            Text(word.armenian)
+                .font(MiBarFont.ui(size: 28, weight: .semibold, editorial: true))
+                .foregroundStyle(Color.black)
+                .padding(.top, 8)
+
+            Text(word.gloss(for: model.language))
+                .font(MiBarFont.ui(size: 14))
+                .foregroundStyle(Color.inkSoft)
+                .padding(.top, 4)
+
+            VStack(spacing: 10) {
+                destinationButton(title: copy.generalCollection, subtitle: copy.saveToGeneral, systemImage: "tray") {
+                    model.saveWord(word.id, toFolder: nil)
+                    onDone()
+                }
+
+                ForEach(model.sortedFavoriteFolders) { folder in
+                    destinationButton(
+                        title: folder.name,
+                        subtitle: "\(folder.wordIDs.count) \(copy.wordsInCollectionLabel)",
+                        systemImage: "folder.fill"
+                    ) {
+                        model.saveWord(word.id, toFolder: folder.id)
+                        onDone()
+                    }
+                }
+            }
+            .padding(.top, 24)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 22)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.paper.ignoresSafeArea())
+    }
+
+    private func destinationButton(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle().fill(Color.navy.opacity(0.08))
+                    Image(systemName: systemImage)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.navy.opacity(0.75))
+                }
+                .frame(width: 40, height: 40)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(MiBarFont.ui(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.black)
+                    Text(subtitle)
+                        .font(MiBarFont.ui(size: 12))
+                        .foregroundStyle(Color.inkSoft)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.navy.opacity(0.35))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
+            }
+        }
+        .buttonStyle(MiBarPressStyle())
     }
 }
 
@@ -1282,15 +1837,45 @@ private func countBlock(value: Int, label: String) -> some View {
 
 struct SettingsSheet: View {
     @Binding var language: AppLanguage
+    var onOpenSupport: () -> Void
     var onLogout: () -> Void
+
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+
+    private var copy: L10n { language.copy }
+
+    private var appVersion: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+        if let build, build != short {
+            return "\(short) (\(build))"
+        }
+        return short
+    }
+
+    private var accountEmail: String {
+        let value = model.email.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "—" : value
+    }
+
+    private var termsURL: URL { URL(string: "https://mibar.app/terms")! }
+    private var privacyURL: URL { URL(string: "https://mibar.app/privacy")! }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Capsule()
+                .fill(Color.navy.opacity(0.14))
+                .frame(width: 42, height: 4)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Kicker(text: "Settings")
-                    Text("Preferences")
+                    Kicker(text: copy.settingsTitle)
+                    Text(copy.settingsPreferences)
                         .font(MiBarFont.ui(size: 28, weight: .semibold, editorial: true))
                         .tracking(-1.12)
                         .foregroundStyle(Color.black)
@@ -1299,46 +1884,188 @@ struct SettingsSheet: View {
                 IconButton(icon: .close, size: 18) { dismiss() }
             }
             .padding(.horizontal, 22)
-            .padding(.top, 8)
 
-            Text("Language")
-                .font(MiBarFont.ui(size: 11, weight: .bold))
-                .tracking(1.1)
-                .textCase(.uppercase)
-                .foregroundStyle(Color.brandBlue)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    sectionLabel(copy.settingsAccount)
+                        .padding(.top, 24)
+
+                    infoRow(
+                        title: copy.settingsEmail,
+                        subtitle: accountEmail
+                    )
+                    .padding(.top, 12)
+
+                    sectionLabel(copy.settingsLanguage)
+                        .padding(.top, 28)
+
+                    VStack(spacing: 10) {
+                        ForEach(AppLanguage.allCases) { option in
+                            languageRow(option)
+                        }
+                    }
+                    .padding(.top, 12)
+
+                    sectionLabel(copy.settingsNotifications)
+                        .padding(.top, 28)
+
+                    reminderRow
+                        .padding(.top, 12)
+
+                    sectionLabel(copy.settingsSupport)
+                        .padding(.top, 28)
+
+                    Button(action: onOpenSupport) {
+                        navigationRow(
+                            title: copy.settingsSupport,
+                            subtitle: copy.settingsSupportSubtitle
+                        )
+                    }
+                    .buttonStyle(MiBarPressStyle())
+                    .padding(.top, 12)
+                    .accessibilityLabel(copy.settingsSupport)
+
+                    sectionLabel(copy.settingsLegal)
+                        .padding(.top, 28)
+
+                    VStack(spacing: 10) {
+                        Button {
+                            openURL(termsURL)
+                        } label: {
+                            navigationRow(title: copy.settingsTerms, subtitle: nil)
+                        }
+                        .buttonStyle(MiBarPressStyle())
+
+                        Button {
+                            openURL(privacyURL)
+                        } label: {
+                            navigationRow(title: copy.settingsPrivacy, subtitle: nil)
+                        }
+                        .buttonStyle(MiBarPressStyle())
+                    }
+                    .padding(.top, 12)
+
+                    sectionLabel(copy.settingsAbout)
+                        .padding(.top, 28)
+
+                    infoRow(
+                        title: copy.settingsVersion,
+                        subtitle: appVersion
+                    )
+                    .padding(.top, 12)
+
+                    Button(action: onLogout) {
+                        HStack {
+                            Text(copy.settingsLogOut)
+                                .font(MiBarFont.ui(size: 16, weight: .semibold))
+                            Spacer()
+                            MiBarIconView(name: .arrow, size: 20)
+                        }
+                        .foregroundStyle(Color.orangeBrand)
+                        .padding(.horizontal, 18)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(Color.orangeBrand.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(MiBarPressStyle())
+                    .padding(.top, 28)
+                    .padding(.bottom, 12)
+                }
                 .padding(.horizontal, 22)
-                .padding(.top, 28)
-
-            VStack(spacing: 10) {
-                ForEach(AppLanguage.allCases) { option in
-                    languageRow(option)
-                }
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 12)
-
-            Spacer(minLength: 24)
-
-            Button(action: onLogout) {
-                HStack {
-                    Text("Log out")
-                        .font(MiBarFont.ui(size: 16, weight: .semibold))
-                    Spacer()
-                    MiBarIconView(name: .arrow, size: 20)
-                }
-                .foregroundStyle(Color.orangeBrand)
-                .padding(.horizontal, 18)
-                .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(Color.orangeBrand.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-            .buttonStyle(MiBarPressStyle())
-            .padding(.horizontal, 22)
-            .padding(.bottom, 28)
+            .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.paper.ignoresSafeArea())
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(MiBarFont.ui(size: 11, weight: .bold))
+            .tracking(1.1)
+            .textCase(.uppercase)
+            .foregroundStyle(Color.brandBlue)
+    }
+
+    private var reminderRow: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(copy.settingsDailyReminder)
+                    .font(MiBarFont.ui(size: 18, weight: .semibold, editorial: true))
+                    .foregroundStyle(Color.black)
+                Text(copy.settingsDailyReminderSubtitle)
+                    .font(MiBarFont.ui(size: 12))
+                    .foregroundStyle(Color.inkSoft)
+            }
+            Spacer(minLength: 0)
+            Toggle("", isOn: $model.dailyReminderEnabled)
+                .labelsHidden()
+                .tint(Color.navy)
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.black.opacity(0.1), lineWidth: 1.5)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(copy.settingsDailyReminder)
+    }
+
+    private func infoRow(title: String, subtitle: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(MiBarFont.ui(size: 16, weight: .semibold))
+                .foregroundStyle(Color.black)
+            Spacer(minLength: 8)
+            Text(subtitle)
+                .font(MiBarFont.ui(size: 14))
+                .foregroundStyle(Color.inkSoft)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.black.opacity(0.1), lineWidth: 1.5)
+        }
+    }
+
+    private func navigationRow(title: String, subtitle: String?) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(MiBarFont.ui(size: 18, weight: .semibold, editorial: true))
+                    .foregroundStyle(Color.black)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(MiBarFont.ui(size: 12))
+                        .foregroundStyle(Color.inkSoft)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.navy.opacity(0.35))
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: subtitle == nil ? 56 : 64, alignment: .leading)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.black.opacity(0.1), lineWidth: 1.5)
+        }
     }
 
     private func languageRow(_ option: AppLanguage) -> some View {
@@ -1379,5 +2106,563 @@ struct SettingsSheet: View {
         }
         .buttonStyle(MiBarPressStyle())
         .accessibilityAddTraits(active ? .isSelected : [])
+    }
+}
+
+private enum SupportNav: Hashable, Identifiable {
+    case compose
+    case conversation(UUID)
+
+    var id: String {
+        switch self {
+        case .compose: return "compose"
+        case .conversation(let id): return id.uuidString
+        }
+    }
+}
+
+struct SupportSheet: View {
+    var language: AppLanguage
+
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var route: SupportNav?
+
+    private var copy: L10n { language.copy }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack(alignment: .center) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(copy.back)
+                                .font(MiBarFont.ui(size: 14, weight: .medium))
+                        }
+                        .foregroundStyle(Color.navy.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(copy.back)
+
+                    Spacer(minLength: 8)
+
+                    Text(copy.supportTitle)
+                        .font(MiBarFont.ui(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.black)
+
+                    Spacer(minLength: 8)
+                    Color.clear.frame(width: 72, height: 1)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Button {
+                            route = .compose
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "square.and.pencil")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text(copy.supportWrite)
+                                    .font(MiBarFont.ui(size: 16, weight: .semibold))
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .opacity(0.45)
+                            }
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 18)
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                            .background(Color.navy)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                        .buttonStyle(MiBarPressStyle())
+                        .accessibilityLabel(copy.supportWrite)
+
+                        Text(copy.supportConversationsLabel)
+                            .font(MiBarFont.ui(size: 11, weight: .bold))
+                            .tracking(1.1)
+                            .textCase(.uppercase)
+                            .foregroundStyle(Color.brandBlue)
+                            .padding(.top, 4)
+
+                        if model.sortedSupportConversations.isEmpty {
+                            Text(copy.supportInboxEmpty)
+                                .font(MiBarFont.ui(size: 14))
+                                .foregroundStyle(Color.inkSoft)
+                                .multilineTextAlignment(.leading)
+                                .padding(.top, 4)
+                        } else {
+                            VStack(spacing: 10) {
+                                ForEach(model.sortedSupportConversations) { conversation in
+                                    Button {
+                                        route = .conversation(conversation.id)
+                                    } label: {
+                                        conversationRow(conversation)
+                                    }
+                                    .buttonStyle(MiBarPressStyle())
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 28)
+                }
+                .scrollIndicators(.hidden)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Color.paper.ignoresSafeArea())
+            .navigationBarHidden(true)
+            .navigationDestination(item: $route) { destination in
+                switch destination {
+                case .compose:
+                    SupportChatView(language: language, conversationID: nil)
+                        .environmentObject(model)
+                case .conversation(let id):
+                    SupportChatView(language: language, conversationID: id)
+                        .environmentObject(model)
+                }
+            }
+        }
+    }
+
+    private func conversationRow(_ conversation: SupportConversation) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Circle().fill(Color.navy.opacity(0.08))
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.navy.opacity(0.7))
+            }
+            .frame(width: 40, height: 40)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(conversation.topic.title(copy: copy))
+                        .font(MiBarFont.ui(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.black)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(Self.shortDate(conversation.updatedAt, language: language))
+                        .font(MiBarFont.ui(size: 11, weight: .medium))
+                        .foregroundStyle(Color.inkSoft)
+                }
+
+                Text(
+                    conversation.previewText.isEmpty
+                        ? copy.supportNoMessagesYet
+                        : conversation.previewText
+                )
+                .font(MiBarFont.ui(size: 13))
+                .foregroundStyle(Color.inkSoft)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.navy.opacity(0.28))
+                .padding(.top, 10)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        }
+    }
+
+    private static func shortDate(_ date: Date, language: AppLanguage) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: language.rawValue == "hy" ? "hy_AM" : language.rawValue)
+        formatter.doesRelativeDateFormatting = true
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+struct SupportChatView: View {
+    var language: AppLanguage
+    /// `nil` = compose a new request; conversation is created only on first send.
+    var conversationID: UUID?
+
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var activeConversationID: UUID?
+    @State private var draftTopic: SupportTopic = .problem
+    @State private var draft = ""
+    @State private var isSending = false
+    @FocusState private var composerFocused: Bool
+
+    private var copy: L10n { language.copy }
+    private var trimmedDraft: String {
+        draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var conversation: SupportConversation? {
+        guard let activeConversationID else { return nil }
+        return model.supportConversations.first(where: { $0.id == activeConversationID })
+    }
+
+    private var selectedTopic: SupportTopic {
+        conversation?.topic ?? draftTopic
+    }
+
+    private var showsTopicPicker: Bool {
+        conversation == nil || (conversation?.messages.isEmpty ?? true)
+    }
+
+    init(language: AppLanguage, conversationID: UUID?) {
+        self.language = language
+        self.conversationID = conversationID
+        _activeConversationID = State(initialValue: conversationID)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center) {
+                Button {
+                    composerFocused = false
+                    dismiss()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(copy.back)
+                            .font(MiBarFont.ui(size: 14, weight: .medium))
+                    }
+                    .foregroundStyle(Color.navy.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copy.back)
+
+                Spacer(minLength: 8)
+
+                VStack(spacing: 2) {
+                    Text(copy.supportTitle)
+                        .font(MiBarFont.ui(size: 13, weight: .bold))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                        .foregroundStyle(Color.brandBlue)
+                    Text(
+                        conversation == nil
+                            ? copy.supportWrite
+                            : selectedTopic.title(copy: copy)
+                    )
+                    .font(MiBarFont.ui(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.black)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 8)
+                Color.clear.frame(width: 72, height: 1)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        supportBubble(copy.supportHeadline)
+
+                        if showsTopicPicker {
+                            Text(copy.supportTopicLabel)
+                                .font(MiBarFont.ui(size: 11, weight: .bold))
+                                .tracking(1.1)
+                                .textCase(.uppercase)
+                                .foregroundStyle(Color.brandBlue)
+                                .padding(.top, 4)
+
+                            topicChips(selected: selectedTopic)
+                        }
+
+                        if let conversation {
+                            ForEach(conversation.messages) { item in
+                                chatRow(item)
+                                    .id(item.id)
+                            }
+                        }
+
+                        Color.clear.frame(height: 1).id("chatBottom")
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
+                }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: conversation?.messages) { _, _ in
+                    scrollChat(proxy)
+                }
+                .onChange(of: composerFocused) { _, focused in
+                    guard focused else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        scrollChat(proxy)
+                    }
+                }
+                .onAppear {
+                    if let activeConversationID {
+                        model.trimSupportTyping(in: activeConversationID)
+                    }
+                    isSending = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        scrollChat(proxy)
+                    }
+                }
+            }
+
+            composer
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
+                .background {
+                    Color.paper
+                        .shadow(color: Color.navy.opacity(0.06), radius: 12, y: -4)
+                }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.paper.ignoresSafeArea())
+        .navigationBarHidden(true)
+    }
+
+    private func scrollChat(_ proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.25)) {
+            proxy.scrollTo("chatBottom", anchor: .bottom)
+        }
+    }
+
+    private func topicChips(selected: SupportTopic) -> some View {
+        VStack(spacing: 8) {
+            ForEach(SupportTopic.allCases) { option in
+                let active = selected == option
+                Button {
+                    if let activeConversationID,
+                       let index = model.supportConversationIndex(id: activeConversationID) {
+                        model.supportConversations[index].topic = option
+                    } else {
+                        draftTopic = option
+                    }
+                } label: {
+                    HStack {
+                        Text(option.title(copy: copy))
+                            .font(MiBarFont.ui(size: 14, weight: active ? .semibold : .medium))
+                            .foregroundStyle(active ? Color.white : Color.navy)
+                        Spacer(minLength: 0)
+                        if active {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Color.white.opacity(0.9))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+                    .background(active ? Color.navy : Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(active ? Color.navy : Color.black.opacity(0.1), lineWidth: 1.5)
+                    }
+                }
+                .buttonStyle(MiBarPressStyle())
+                .accessibilityAddTraits(active ? .isSelected : [])
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func chatRow(_ item: SupportChatMessage) -> some View {
+        switch item.role {
+        case .support:
+            supportBubble(item.text)
+        case .user:
+            userBubble(item.text)
+        case .typing:
+            supportBubble(copy.supportTyping, muted: true)
+        }
+    }
+
+    private func supportBubble(_ text: String, muted: Bool = false) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            ZStack {
+                Circle().fill(Color.navy)
+                Text("M")
+                    .font(MiBarFont.ui(size: 12, weight: .bold))
+                    .foregroundStyle(Color.white)
+            }
+            .frame(width: 28, height: 28)
+
+            Text(text)
+                .font(MiBarFont.ui(size: 15, weight: muted ? .medium : .regular))
+                .foregroundStyle(muted ? Color.inkSoft : Color.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Color.white)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 6,
+                        bottomLeadingRadius: 18,
+                        bottomTrailingRadius: 18,
+                        topTrailingRadius: 18,
+                        style: .continuous
+                    )
+                )
+                .overlay {
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 6,
+                        bottomLeadingRadius: 18,
+                        bottomTrailingRadius: 18,
+                        topTrailingRadius: 18,
+                        style: .continuous
+                    )
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                }
+
+            Spacer(minLength: 36)
+        }
+    }
+
+    private func userBubble(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Spacer(minLength: 36)
+            Text(text)
+                .font(MiBarFont.ui(size: 15, weight: .medium))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Color.navy)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 18,
+                        bottomLeadingRadius: 18,
+                        bottomTrailingRadius: 6,
+                        topTrailingRadius: 18,
+                        style: .continuous
+                    )
+                )
+        }
+    }
+
+    private var composer: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            TextField(copy.supportMessagePlaceholder, text: $draft, axis: .vertical)
+                .lineLimit(1...5)
+                .focused($composerFocused)
+                .textInputAutocapitalization(.sentences)
+                .submitLabel(.send)
+                .onSubmit { send() }
+                .font(MiBarFont.ui(size: 15))
+                .foregroundStyle(Color.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(
+                            composerFocused ? Color.navy.opacity(0.35) : Color.black.opacity(0.1),
+                            lineWidth: 1.5
+                        )
+                }
+            Button {
+                send()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(canSend ? Color.orangeBrand : Color.navy.opacity(0.18))
+                    if isSending {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color.white)
+                    }
+                }
+                .frame(width: 44, height: 44)
+            }
+            .buttonStyle(MiBarPressStyle())
+            .disabled(!canSend)
+            .accessibilityLabel(copy.supportSend)
+        }
+    }
+
+    private var canSend: Bool {
+        !trimmedDraft.isEmpty && !isSending
+    }
+
+    private func send() {
+        let text = trimmedDraft
+        guard !text.isEmpty, !isSending else { return }
+
+        let topic = selectedTopic
+        let conversationID: UUID
+        if let existing = activeConversationID {
+            conversationID = existing
+        } else {
+            conversationID = model.createSupportConversation(topic: topic)
+            activeConversationID = conversationID
+        }
+
+        guard let index = model.supportConversationIndex(id: conversationID) else { return }
+
+        composerFocused = false
+        draft = ""
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            model.supportConversations[index].topic = topic
+            model.supportConversations[index].messages.append(
+                SupportChatMessage(role: .user, text: text)
+            )
+            model.supportConversations[index].updatedAt = Date()
+        }
+
+        guard !model.supportConversations[index].didAutoReply else { return }
+
+        model.supportConversations[index].didAutoReply = true
+        isSending = true
+        withAnimation(.easeOut(duration: 0.2)) {
+            model.supportConversations[index].messages.append(
+                SupportChatMessage(role: .typing)
+            )
+        }
+
+        let replyText: String
+        switch topic {
+        case .problem:
+            replyText = copy.supportAutoReplyProblem
+        case .feedback:
+            replyText = copy.supportAutoReplyFeedback
+        case .other:
+            replyText = copy.supportAutoReplyOther
+        }
+
+        Task {
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    model.trimSupportTyping(in: conversationID)
+                    if let idx = model.supportConversationIndex(id: conversationID) {
+                        model.supportConversations[idx].messages.append(
+                            SupportChatMessage(role: .support, text: replyText)
+                        )
+                        model.supportConversations[idx].updatedAt = Date()
+                    }
+                }
+                isSending = false
+            }
+        }
     }
 }

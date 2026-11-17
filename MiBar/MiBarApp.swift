@@ -13,6 +13,7 @@ struct MiBarApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(model)
+                .onAppear { model.syncWidget() }
         }
     }
 }

@@ -14,6 +14,8 @@ extension Color {
     static let brandBlue = Color(hex: 0x406EB7)
     static let orangeBrand = Color(hex: 0xE95623)
     static let orangeSoft = Color(hex: 0xF2A07E)
+    /// Favorites collection cards.
+    static let collectionCard = Color(hex: 0x406EB7)
     static let paper = Color(hex: 0xE3E3E3)
     static let inkSoft = Color(hex: 0x5A5A5A)
     static let danger = Color(hex: 0xC62828)
@@ -172,7 +174,10 @@ struct PrimaryButton: View {
     var title: String
     var icon: MiBarIcon? = .arrow
     var isLoading = false
+    var disabled = false
     var action: () -> Void
+
+    private var isDisabled: Bool { isLoading || disabled }
 
     var body: some View {
         Button(action: action) {
@@ -196,10 +201,10 @@ struct PrimaryButton: View {
             .frame(height: 58)
             .background(Color.navy)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .opacity(isLoading ? 0.7 : 1)
+            .opacity(isDisabled ? 0.45 : 1)
         }
         .buttonStyle(MiBarPressStyle())
-        .disabled(isLoading)
+        .disabled(isDisabled)
     }
 }
 
@@ -286,5 +291,39 @@ struct ScreenMetrics {
 
     static var armenianWord: CGFloat {
         min(88, max(65, width * 0.20))
+    }
+}
+
+/// Single-line Armenian lemma that shrinks cleanly inside tight frames (widget / hero).
+struct AdaptiveArmenianWord: View {
+    var text: String
+    var size: CGFloat
+    var weight: UIFont.Weight = UIFont.Weight.semibold
+    var color: Color = .primary
+    var minScale: CGFloat = 0.34
+    var alignment: Alignment = .center
+
+    private var tracking: CGFloat {
+        let base = size * -0.03
+        // Long words: less negative tracking so glyphs don't collide when scaled down
+        if text.count >= 10 { return size * -0.012 }
+        if text.count >= 7 { return size * -0.02 }
+        return base
+    }
+
+    private var textAlignment: TextAlignment {
+        alignment == .leading ? .leading : .center
+    }
+
+    var body: some View {
+        Text(text)
+            .font(MiBarFont.ui(size: size, weight: weight, editorial: true))
+            .tracking(tracking)
+            .foregroundStyle(color)
+            .multilineTextAlignment(textAlignment)
+            .lineLimit(1)
+            .minimumScaleFactor(minScale)
+            .allowsTightening(true)
+            .frame(maxWidth: .infinity, alignment: alignment)
     }
 }
