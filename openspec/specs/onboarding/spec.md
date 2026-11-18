@@ -65,6 +65,10 @@ The OTP screen SHALL collect a four-digit code and verify only when the user tap
 - **WHEN** a returning (Log in) user enters `1111` and taps Continue
 - **THEN** the app proceeds to the loading moment and then the main shell without language selection
 
+#### Scenario: Keyboard keeps Send code again reachable
+- **WHEN** the OTP field is focused and the keyboard is open
+- **THEN** Continue and Send code again remain visible above the keyboard on iPhone 16 and larger phones
+
 ### Requirement: Language selection drives UI language
 After OTP for a new user, the app SHALL present English, Russian, and Armenian options. The selected language SHALL apply to main-app chrome (Home, All words, Favorites, tabs, widget sheet, share labels, settings).
 

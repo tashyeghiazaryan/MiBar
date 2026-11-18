@@ -45,36 +45,118 @@ struct MiBarEntry: TimelineEntry {
     let snapshot: WidgetDataStore.Snapshot
 }
 
-struct MiBarProvider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> MiBarEntry {
-        entry(style: .classic)
-    }
-
-    func snapshot(for configuration: MiBarWidgetIntent, in context: Context) async -> MiBarEntry {
-        entry(style: configuration.style)
-    }
-
-    func timeline(for configuration: MiBarWidgetIntent, in context: Context) async -> Timeline<MiBarEntry> {
-        let item = entry(style: configuration.style)
-        let refresh = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now.addingTimeInterval(3600)
-        return Timeline(entries: [item], policy: .after(refresh))
-    }
-
-    /// Prefer the style chosen in the app; fall back to the widget configuration.
-    private func entry(style configurationStyle: MiBarWidgetStyle) -> MiBarEntry {
+private enum MiBarTimeline {
+    static func entry(style configurationStyle: MiBarWidgetStyle = .classic) -> MiBarEntry {
         let snapshot = WidgetDataStore.load()
         let style = MiBarWidgetStyle(rawValue: snapshot.style) ?? configurationStyle
         return MiBarEntry(date: .now, style: style, snapshot: snapshot)
     }
+
+    static func nextRefresh() -> Date {
+        Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now.addingTimeInterval(3600)
+    }
+}
+
+struct MiBarProvider: AppIntentTimelineProvider {
+    func placeholder(in context: Context) -> MiBarEntry {
+        MiBarTimeline.entry(style: .classic)
+    }
+
+    func snapshot(for configuration: MiBarWidgetIntent, in context: Context) async -> MiBarEntry {
+        MiBarTimeline.entry(style: configuration.style)
+    }
+
+    func timeline(for configuration: MiBarWidgetIntent, in context: Context) async -> Timeline<MiBarEntry> {
+        Timeline(entries: [MiBarTimeline.entry(style: configuration.style)], policy: .after(MiBarTimeline.nextRefresh()))
+    }
+}
+
+/// Lock Screen widgets use StaticConfiguration — AppIntent widgets often fail to appear in the Lock Screen gallery.
+struct MiBarLockProvider: TimelineProvider {
+    func placeholder(in context: Context) -> MiBarEntry {
+        MiBarTimeline.entry()
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (MiBarEntry) -> Void) {
+        completion(MiBarTimeline.entry())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<MiBarEntry>) -> Void) {
+        completion(Timeline(entries: [MiBarTimeline.entry()], policy: .after(MiBarTimeline.nextRefresh())))
+    }
 }
 
 struct MiBarWidgetEntryView: View {
+    @Environment(\.widgetFamily) private var family
+
     var style: MiBarWidgetStyle
     var snapshot: WidgetDataStore.Snapshot
 
     private var armenian: String { snapshot.armenian }
 
     var body: some View {
+        switch family {
+        case .accessoryCircular:
+            circularAccessory
+        case .accessoryRectangular:
+            rectangularAccessory
+        case .accessoryInline:
+            inlineAccessory
+        default:
+            homeSmall
+        }
+    }
+
+    private var circularAccessory: some View {
+        Text(armenian)
+            .font(.custom("Noto Serif Armenian", size: 18).weight(.semibold))
+            .minimumScaleFactor(0.35)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .widgetAccentable()
+            .containerBackground(for: .widget) {
+                AccessoryWidgetBackground()
+            }
+    }
+
+    private var rectangularAccessory: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(snapshot.wordOfTheDayTitle)
+                .font(.system(size: 10, weight: .bold))
+                .textCase(.uppercase)
+                .widgetAccentable()
+                .lineLimit(1)
+            Text(armenian)
+                .font(.custom("Noto Serif Armenian", size: 20).weight(.semibold))
+                .minimumScaleFactor(0.45)
+                .lineLimit(1)
+            Text("[\(snapshot.transliteration)] · \(snapshot.gloss)")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .containerBackground(for: .widget) {
+            AccessoryWidgetBackground()
+        }
+    }
+
+    private var inlineAccessory: some View {
+        ViewThatFits(in: .horizontal) {
+            Text("\(armenian) · \(snapshot.gloss)")
+            Text(armenian)
+        }
+        .font(.system(size: 14, weight: .semibold))
+        .minimumScaleFactor(0.7)
+        .lineLimit(1)
+        .widgetAccentable()
+        .containerBackground(for: .widget) {
+            Color.clear
+        }
+    }
+
+    private var homeSmall: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(snapshot.wordOfTheDayTitle)
                 .font(.system(size: 11, weight: .bold))
@@ -108,6 +190,9 @@ struct MiBarWidgetEntryView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .containerBackground(for: .widget) {
+            MiBarWidgetEntryView.background(for: style)
+        }
     }
 
     private var wordPointSize: CGFloat {
@@ -174,14 +259,22 @@ struct MiBarWordWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "MiBarWord", intent: MiBarWidgetIntent.self, provider: MiBarProvider()) { entry in
             MiBarWidgetEntryView(style: entry.style, snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    MiBarWidgetEntryView.background(for: entry.style)
-                }
         }
         .configurationDisplayName("MiBar")
         .description("One Armenian word, every day.")
         .supportedFamilies([.systemSmall])
         .contentMarginsDisabled()
+    }
+}
+
+struct MiBarLockScreenWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "MiBarLockScreen", provider: MiBarLockProvider()) { entry in
+            MiBarWidgetEntryView(style: entry.style, snapshot: entry.snapshot)
+        }
+        .configurationDisplayName("MiBar")
+        .description("Today’s Armenian word on the Lock Screen.")
+        .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
 
@@ -193,5 +286,6 @@ struct MiBarWidgetBundle: WidgetBundle {
 
     var body: some Widget {
         MiBarWordWidget()
+        MiBarLockScreenWidget()
     }
 }

@@ -278,19 +278,166 @@ struct BrandMark: View {
     }
 }
 
-struct ScreenMetrics {
-    static var width: CGFloat { UIScreen.main.bounds.width }
-    static var height: CGFloat { UIScreen.main.bounds.height }
+/// Layout tiers for the iPhone 16 family (logical points, portrait).
+/// - compact: 16 (393×852), 16 Pro (402×874)
+/// - plus: 16 Plus (430×932)
+/// - max: 16 Pro Max (440×956)
+enum PhoneLayout: Equatable {
+    case compact
+    case plus
+    case max
+}
 
-    /// iPhone 16 / 16 Pro (~852–874); Plus / Pro Max are ≥ 900.
-    static var isCompactPhone: Bool { height < 900 }
+struct ScreenMetrics {
+    static var width: CGFloat { activeBounds.width }
+    static var height: CGFloat { activeBounds.height }
+
+    static var layout: PhoneLayout {
+        // Height separates Plus (~932) from Pro Max (~956); width backs up landscape/edge cases.
+        if height >= 945 || width >= 436 { return .max }
+        if height >= 900 || width >= 420 { return .plus }
+        return .compact
+    }
+
+    /// iPhone 16 / 16 Pro.
+    static var isCompactPhone: Bool { layout == .compact }
+
+    // MARK: Spacing
+
+    /// Main tabs (Today / Archive / Favorites) horizontal inset.
+    static var pagePadding: CGFloat {
+        switch layout {
+        case .compact: return 25
+        case .plus: return 28
+        case .max: return 32
+        }
+    }
+
+    /// Auth / onboarding screens.
+    static var onboardingPadding: CGFloat {
+        switch layout {
+        case .compact: return 30
+        case .plus: return 32
+        case .max: return 36
+        }
+    }
+
+    static var sectionTop: CGFloat {
+        switch layout {
+        case .compact: return 20
+        case .plus: return 22
+        case .max: return 26
+        }
+    }
+
+    // MARK: Type
 
     static var displayTitle: CGFloat {
-        min(55, max(42, width * 0.12))
+        switch layout {
+        case .compact: return min(50, max(42, width * 0.118))
+        case .plus: return min(54, max(46, width * 0.118))
+        case .max: return min(58, max(48, width * 0.12))
+        }
+    }
+
+    /// Archive / Favorites page titles.
+    static var pageTitle: CGFloat {
+        switch layout {
+        case .compact: return 38
+        case .plus: return 41
+        case .max: return 44
+        }
     }
 
     static var armenianWord: CGFloat {
-        min(88, max(65, width * 0.20))
+        switch layout {
+        case .compact: return min(82, max(68, width * 0.195))
+        case .plus: return min(90, max(76, width * 0.195))
+        case .max: return min(98, max(82, width * 0.205))
+        }
+    }
+
+    static var welcomeHeadline: CGFloat {
+        switch layout {
+        case .compact: return 32
+        case .plus: return 34
+        case .max: return 36
+        }
+    }
+
+    // MARK: Hero / constellation
+
+    static var constellationHeight: CGFloat {
+        switch layout {
+        case .compact: return 165
+        case .plus: return 184
+        case .max: return 200
+        }
+    }
+
+    static var constellationHeightKeyboard: CGFloat {
+        switch layout {
+        case .compact: return 88
+        case .plus: return 128
+        case .max: return 148
+        }
+    }
+
+    static var heroTop: CGFloat {
+        switch layout {
+        case .compact: return 32
+        case .plus: return 37
+        case .max: return 42
+        }
+    }
+
+    static var heroWordTop: CGFloat {
+        switch layout {
+        case .compact: return 36
+        case .plus: return 45
+        case .max: return 52
+        }
+    }
+
+    static var heroActionsTop: CGFloat {
+        switch layout {
+        case .compact: return 28
+        case .plus: return 35
+        case .max: return 40
+        }
+    }
+
+    static var heroDetailMinHeight: CGFloat {
+        switch layout {
+        case .compact: return 340
+        case .plus: return 372
+        case .max: return 400
+        }
+    }
+
+    // MARK: Sheets
+
+    static var sheetMaxFraction: CGFloat {
+        switch layout {
+        case .compact: return 0.90
+        case .plus: return 0.88
+        case .max: return 0.86
+        }
+    }
+
+    static var sheetMaxHeight: CGFloat { height * sheetMaxFraction }
+
+    // MARK: Bounds
+
+    private static var activeBounds: CGRect {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let scene = scenes.first(where: { $0.activationState == .foregroundActive })
+            ?? scenes.first,
+           let window = scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first
+        {
+            return window.bounds
+        }
+        return UIScreen.main.bounds
     }
 }
 

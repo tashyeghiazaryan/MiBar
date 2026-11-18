@@ -32,8 +32,12 @@ The main app SHALL publish today’s word content and selected widget style to a
 - **THEN** the shared store is updated with that style and today’s word fields
 
 ### Requirement: WidgetKit extension exists
-The `MiBarWidget` extension SHALL read from the App Group store when available and render the configured style (Classic / Soft / Sun / Clear). Clear SHALL use a frosted-glass presentation when the platform supports it.
+The `MiBarWidget` extension SHALL read from the App Group store when available and render the configured style (Classic / Soft / Sun / Clear) for Home Screen `systemSmall`. Clear SHALL use a frosted-glass presentation when the platform supports it. Lock Screen support SHALL be a separate `StaticConfiguration` widget exposing `accessoryCircular`, `accessoryRectangular`, and `accessoryInline`.
 
 #### Scenario: Add widget from Home Screen
 - **WHEN** the user adds a MiBar widget from the iOS Home Screen gallery
 - **THEN** a styled word widget appears using the last published style and word data when present
+
+#### Scenario: Add Lock Screen widget
+- **WHEN** the user customizes the Lock Screen and searches for MiBar
+- **THEN** circular, rectangular, and inline MiBar widgets are available and show today’s word

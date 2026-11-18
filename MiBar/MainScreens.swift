@@ -9,15 +9,43 @@ struct MainShell: View {
 
     private var today: Word { model.todayWord }
 
-    private var scrollID: String {
-        if let detail = model.detail { return "detail-\(detail.id)" }
-        return "tab-\(model.tab.rawValue)"
-    }
+    /// Remount only when switching tabs — keep All Words / Favorites alive under word detail
+    /// so scroll position is preserved on back.
+    private var tabContentID: String { "tab-\(model.tab.rawValue)" }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
-                Group {
+                ZStack {
+                    Group {
+                        if model.tab == .today {
+                            WordFeature(
+                                word: today,
+                                saved: model.isSaved(today.id),
+                                widgetStyle: model.widgetStyle,
+                                onToggleSave: { handleSaveTap(for: today) },
+                                onChooseWidget: {
+                                    withAnimation(.easeOut(duration: 0.28)) { showWidget = true }
+                                }
+                            )
+                        } else if model.tab == .archive {
+                            ScrollView {
+                                ArchivePage(
+                                    onOpen: { model.open($0) },
+                                    onToggleSave: { handleSaveTap(for: $0) }
+                                )
+                            }
+                            .scrollIndicators(.hidden)
+                        } else {
+                            FavoritesPage(
+                                onOpen: { model.open($0) }
+                            )
+                        }
+                    }
+                    .id(tabContentID)
+                    .opacity(model.detail == nil ? 1 : 0)
+                    .allowsHitTesting(model.detail == nil)
+
                     if let detail = model.detail {
                         WordFeature(
                             word: detail,
@@ -26,31 +54,10 @@ struct MainShell: View {
                             onToggleSave: { handleSaveTap(for: detail) },
                             onBack: { model.detail = nil }
                         )
-                    } else if model.tab == .today {
-                        WordFeature(
-                            word: today,
-                            saved: model.isSaved(today.id),
-                            widgetStyle: model.widgetStyle,
-                            onToggleSave: { handleSaveTap(for: today) },
-                            onChooseWidget: {
-                                withAnimation(.easeOut(duration: 0.28)) { showWidget = true }
-                            }
-                        )
-                    } else if model.tab == .archive {
-                        ScrollView {
-                            ArchivePage(
-                                onOpen: { model.open($0) },
-                                onToggleSave: { handleSaveTap(for: $0) }
-                            )
-                        }
-                        .scrollIndicators(.hidden)
-                    } else {
-                        FavoritesPage(
-                            onOpen: { model.open($0) }
-                        )
+                        .transition(.opacity)
+                        .zIndex(1)
                     }
                 }
-                .id(scrollID)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if model.detail == nil && !showWidget {
@@ -123,9 +130,9 @@ struct TabBar: View {
             item(.archive, copy.tabAllWords, .calendar)
             item(.favorites, copy.tabFavorites, .heart)
         }
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .padding(.horizontal, 15)
+        .padding(.top, ScreenMetrics.layout == .max ? 10 : 8)
+        .padding(.bottom, ScreenMetrics.layout == .max ? 10 : 8)
+        .padding(.horizontal, ScreenMetrics.layout == .compact ? 12 : 16)
         .background {
             Rectangle()
                 .fill(Color.paper.opacity(0.96))
@@ -393,7 +400,7 @@ struct WordFeature: View {
                 }
             }
         }
-        .padding(.horizontal, 25)
+        .padding(.horizontal, ScreenMetrics.pagePadding)
         .padding(.top, 8)
         .padding(.bottom, 10)
         .sheet(isPresented: $showSettings) {
@@ -442,10 +449,10 @@ struct WordFeature: View {
                 alignment: .center
             )
             .padding(.horizontal, 8)
-            .padding(.top, 45)
+            .padding(.top, ScreenMetrics.heroWordTop)
 
             meta
-                .padding(.top, 22)
+                .padding(.top, ScreenMetrics.layout == .compact ? 18 : 22)
 
             HStack(alignment: .top, spacing: 0) {
                 VStack(spacing: 7) {
@@ -470,14 +477,14 @@ struct WordFeature: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .frame(width: 248)
-            .padding(.top, 35)
+            .frame(width: ScreenMetrics.layout == .max ? 268 : 248)
+            .padding(.top, ScreenMetrics.heroActionsTop)
         }
-        .padding(.top, 37)
-        .padding(.horizontal, 20)
+        .padding(.top, ScreenMetrics.heroTop)
+        .padding(.horizontal, ScreenMetrics.layout == .compact ? 18 : 20)
         .padding(.bottom, isDetail ? 30 : 22)
         .frame(maxWidth: .infinity)
-        .frame(minHeight: isDetail ? 372 : nil)
+        .frame(minHeight: isDetail ? ScreenMetrics.heroDetailMinHeight : nil)
         .background(Color.navy)
     }
 
@@ -585,7 +592,7 @@ struct WordFeature: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.line).frame(height: 1)
         }
-        .padding(.horizontal, 25)
+        .padding(.horizontal, ScreenMetrics.pagePadding)
     }
 
     private func culture(_ note: String) -> some View {
@@ -617,7 +624,7 @@ struct WordFeature: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.line).frame(height: 1)
         }
-        .padding(.horizontal, 25)
+        .padding(.horizontal, ScreenMetrics.pagePadding)
     }
 
     private var tomorrow: some View {
@@ -632,7 +639,7 @@ struct WordFeature: View {
             Rectangle().fill(Color.line).frame(height: 1)
         }
         .padding(.top, 23)
-        .padding(.horizontal, 25)
+        .padding(.horizontal, ScreenMetrics.pagePadding)
     }
 
     private func togglePlay() {
@@ -876,7 +883,7 @@ private struct WidgetPromo: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.line, lineWidth: 1)
         }
-        .padding(.horizontal, 25)
+        .padding(.horizontal, ScreenMetrics.pagePadding)
         .padding(.top, 18)
         .padding(.bottom, 28)
     }
@@ -906,14 +913,14 @@ struct WidgetStyleSheet: View {
                             .fill(Color.navy.opacity(0.14))
                             .frame(width: 42, height: 4)
                             .frame(maxWidth: .infinity)
-                            .padding(.bottom, 14)
+                            .padding(.bottom, 10)
 
                         HStack(alignment: .top, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Kicker(text: copy.homeScreen)
                                 Text(copy.chooseYourWidget)
-                                    .font(MiBarFont.ui(size: 28, weight: .semibold, editorial: true))
-                                    .tracking(-1.12)
+                                    .font(MiBarFont.ui(size: 24, weight: .semibold, editorial: true))
+                                    .tracking(-0.96)
                                     .foregroundStyle(Color.black)
                             }
                             Spacer(minLength: 8)
@@ -922,15 +929,15 @@ struct WidgetStyleSheet: View {
                         .padding(.horizontal, 22)
 
                         Text(copy.widgetSwipeHint)
-                            .font(MiBarFont.ui(size: 13))
+                            .font(MiBarFont.ui(size: 12))
                             .foregroundStyle(Color.inkSoft)
-                            .lineSpacing(4)
-                            .padding(.top, 12)
+                            .lineSpacing(3)
+                            .padding(.top, 8)
                             .padding(.horizontal, 22)
                             .fixedSize(horizontal: false, vertical: true)
 
                         carousel
-                            .padding(.top, 18)
+                            .padding(.top, 12)
 
                         HStack(spacing: 6) {
                             ForEach(HomeWidgetStyle.allCases) { style in
@@ -940,46 +947,50 @@ struct WidgetStyleSheet: View {
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.top, 12)
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
                         .animation(.easeOut(duration: 0.2), value: selected)
 
-                        VStack(alignment: .leading, spacing: 8) {
+                        Rectangle()
+                            .fill(Color.line)
+                            .frame(height: 1)
+                            .padding(.horizontal, 22)
+
+                        VStack(alignment: .leading, spacing: 6) {
                             Text(copy.howToAdd)
-                                .font(MiBarFont.ui(size: 22, weight: .semibold, editorial: true))
-                                .tracking(-0.66)
+                                .font(MiBarFont.ui(size: 20, weight: .semibold, editorial: true))
+                                .tracking(-0.6)
                                 .foregroundStyle(Color.black)
                             (
                                 Text(copy.widgetDisclaimerPrefix)
                                 + Text(selectedName).fontWeight(.bold)
                                 + Text(copy.widgetDisclaimerSuffix)
                             )
-                            .font(MiBarFont.ui(size: 13))
+                            .font(MiBarFont.ui(size: 12))
                             .foregroundStyle(Color.inkSoft)
-                            .lineSpacing(4)
+                            .lineSpacing(3)
                         }
-                        .padding(.top, 18)
+                        .padding(.top, 14)
                         .padding(.horizontal, 22)
-                        .overlay(alignment: .top) {
-                            Rectangle().fill(Color.line).frame(height: 1).padding(.horizontal, 22)
-                        }
 
-                        VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 12) {
                             stepGroup("iPhone", copy.iphoneWidgetSteps(styleName: selectedName))
                             stepGroup("Android", copy.androidWidgetSteps(styleName: selectedName))
                         }
-                        .padding(.top, 16)
+                        .padding(.top, 12)
                         .padding(.horizontal, 22)
-                        .padding(.bottom, 22)
-
-                        PrimaryButton(title: copy.gotIt, icon: .check, action: onClose)
-                            .padding(.horizontal, 22)
+                        .padding(.bottom, 8)
                     }
-                    .padding(.top, 12)
-                    .padding(.bottom, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
                 }
-                .frame(maxHeight: UIScreen.main.bounds.height * 0.88)
+                .frame(maxHeight: ScreenMetrics.sheetMaxHeight - 88)
                 .scrollIndicators(.hidden)
 
+                PrimaryButton(title: copy.gotIt, icon: .check, action: onClose)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
             }
             .frame(maxWidth: .infinity)
             .clipShape(
@@ -999,18 +1010,21 @@ struct WidgetStyleSheet: View {
         .onAppear { visible = selected }
     }
 
+    private var previewSide: CGFloat { ScreenMetrics.layout == .compact ? 108 : 116 }
+    private var cardWidth: CGFloat { previewSide + 28 }
+
     private var carousel: some View {
         GeometryReader { geo in
-            let inset = max(22, (geo.size.width - 168) / 2)
+            let inset = max(22, (geo.size.width - cardWidth) / 2)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
+                HStack(spacing: 12) {
                     ForEach(HomeWidgetStyle.allCases) { style in
                         card(style)
                             .id(style)
                     }
                 }
                 .scrollTargetLayout()
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
             }
             .scrollClipDisabled()
             .contentMargins(.horizontal, inset, for: .scrollContent)
@@ -1022,7 +1036,7 @@ struct WidgetStyleSheet: View {
                 }
             }
         }
-        .frame(height: 256)
+        .frame(height: previewSide + 72)
     }
 
     private func card(_ style: HomeWidgetStyle) -> some View {
@@ -1031,23 +1045,23 @@ struct WidgetStyleSheet: View {
             selected = style
             visible = style
         } label: {
-            VStack(spacing: 8) {
-                WidgetPreviewCard(word: word, style: style, side: 140)
+            VStack(spacing: 6) {
+                WidgetPreviewCard(word: word, style: style, side: previewSide)
                 Text(style.localizedName(for: model.language))
-                    .font(MiBarFont.ui(size: 14, weight: .bold))
+                    .font(MiBarFont.ui(size: 13, weight: .bold))
                     .foregroundStyle(Color.black)
                 Text(style.localizedHint(for: model.language))
                     .font(MiBarFont.ui(size: 10))
                     .foregroundStyle(Color.inkSoft)
             }
-            .padding(.top, 14)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
-            .frame(width: 168)
+            .padding(.top, 10)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
+            .frame(width: cardWidth)
             .background(active ? Color.navy.opacity(0.04) : Color.paper)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(active ? Color.navy : Color.navy.opacity(0.1), lineWidth: active ? 2 : 1)
             }
         }
@@ -1056,20 +1070,20 @@ struct WidgetStyleSheet: View {
     }
 
     private func stepGroup(_ title: String, _ steps: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(MiBarFont.ui(size: 11, weight: .bold))
+                .font(MiBarFont.ui(size: 10, weight: .bold))
                 .tracking(1.1)
                 .textCase(.uppercase)
                 .foregroundStyle(Color.brandBlue)
-                .padding(.bottom, 2)
+                .padding(.bottom, 1)
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("\(index + 1).")
                     Text(.init(step))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(MiBarFont.ui(size: 13))
+                .font(MiBarFont.ui(size: 12))
                 .foregroundStyle(Color.black)
             }
         }
@@ -1088,8 +1102,8 @@ struct ArchivePage: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Kicker(text: copy.archiveKicker)
                     Text(copy.archiveTitle)
-                        .font(MiBarFont.ui(size: 41, editorial: true))
-                        .tracking(-1.64)
+                        .font(MiBarFont.ui(size: ScreenMetrics.pageTitle, editorial: true))
+                        .tracking(ScreenMetrics.pageTitle * -0.04)
                         .foregroundStyle(Color.black)
                         .padding(.top, 9)
                     Text(copy.archiveSubtitle)
@@ -1121,8 +1135,8 @@ struct ArchivePage: View {
             }
             .padding(.top, 9)
         }
-        .padding(.horizontal, 25)
-        .padding(.top, 20)
+        .padding(.horizontal, ScreenMetrics.pagePadding)
+        .padding(.top, ScreenMetrics.sectionTop)
         .padding(.bottom, 26)
     }
 
@@ -1141,6 +1155,10 @@ struct ArchivePage: View {
                         Text(word.armenian)
                             .font(MiBarFont.ui(size: 21, weight: .semibold, editorial: true))
                             .foregroundStyle(Color.black)
+                            .lineLimit(1)
+                        Text("[\(word.transliteration)]")
+                            .font(MiBarFont.ui(size: 12, italic: true, editorial: true))
+                            .foregroundStyle(Color.muted4)
                             .lineLimit(1)
                         Text(word.gloss(for: model.language))
                             .font(MiBarFont.ui(size: 12))
@@ -1254,8 +1272,8 @@ struct FavoritesPage: View {
                         .padding(.top, 14)
                     }
                 }
-                .padding(.horizontal, 25)
-                .padding(.top, 20)
+                .padding(.horizontal, ScreenMetrics.pagePadding)
+                .padding(.top, ScreenMetrics.sectionTop)
                 .padding(.bottom, 26)
             }
             .scrollIndicators(.hidden)
@@ -1274,27 +1292,22 @@ struct FavoritesPage: View {
                         name: $newFolderName,
                         copy: copy,
                         onCancel: {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                showCreateFolder = false
-                            }
                             newFolderName = ""
+                            showCreateFolder = false
                         },
                         onCreate: {
                             let createdID = model.createFavoriteFolder(name: newFolderName)
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                showCreateFolder = false
-                            }
                             newFolderName = ""
+                            showCreateFolder = false
                             if let createdID {
                                 openedFolderID = createdID
                             }
                         }
                     )
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
                     .zIndex(10)
+                    .transition(.opacity)
                 }
             }
-            .animation(.easeOut(duration: 0.22), value: showCreateFolder)
         }
     }
 
@@ -1303,8 +1316,8 @@ struct FavoritesPage: View {
             VStack(alignment: .leading, spacing: 0) {
                 Kicker(text: copy.favoritesKicker)
                 Text(copy.favoritesTitle)
-                    .font(MiBarFont.ui(size: 41, editorial: true))
-                    .tracking(-1.64)
+                    .font(MiBarFont.ui(size: ScreenMetrics.pageTitle, editorial: true))
+                    .tracking(ScreenMetrics.pageTitle * -0.04)
                     .foregroundStyle(Color.black)
                     .padding(.top, 9)
             }
@@ -1312,9 +1325,7 @@ struct FavoritesPage: View {
             HStack(alignment: .center, spacing: 10) {
                 Button {
                     newFolderName = ""
-                    withAnimation(.easeOut(duration: 0.22)) {
-                        showCreateFolder = true
-                    }
+                    showCreateFolder = true
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
@@ -1449,18 +1460,26 @@ private struct CreateCollectionModal: View {
     var onCreate: () -> Void
 
     @FocusState private var focused: Bool
+    @State private var appeared = false
 
     private var canCreate: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var presentAnimation: Animation {
+        .spring(response: 0.48, dampingFraction: 0.84, blendDuration: 0.12)
+    }
+
+    private var dismissAnimation: Animation {
+        .easeIn(duration: 0.22)
+    }
+
     var body: some View {
         ZStack {
-            Color.navy.opacity(0.42)
+            Color.navy.opacity(appeared ? 0.42 : 0)
                 .ignoresSafeArea()
                 .onTapGesture {
-                    focused = false
-                    onCancel()
+                    dismissModal(then: onCancel)
                 }
 
             VStack(alignment: .leading, spacing: 0) {
@@ -1484,7 +1503,7 @@ private struct CreateCollectionModal: View {
                     .submitLabel(.done)
                     .onSubmit {
                         guard canCreate else { return }
-                        onCreate()
+                        dismissModal(then: onCreate)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 14)
@@ -1500,7 +1519,9 @@ private struct CreateCollectionModal: View {
                     .padding(.top, 22)
 
                 HStack(spacing: 10) {
-                    Button(action: onCancel) {
+                    Button {
+                        dismissModal(then: onCancel)
+                    } label: {
                         Text(copy.cancel)
                             .font(MiBarFont.ui(size: 15, weight: .semibold))
                             .foregroundStyle(Color.navy)
@@ -1514,7 +1535,9 @@ private struct CreateCollectionModal: View {
                     }
                     .buttonStyle(MiBarPressStyle())
 
-                    Button(action: onCreate) {
+                    Button {
+                        dismissModal(then: onCreate)
+                    } label: {
                         Text(copy.createCollectionConfirm)
                             .font(MiBarFont.ui(size: 15, weight: .semibold))
                             .foregroundStyle(Color.white)
@@ -1538,13 +1561,29 @@ private struct CreateCollectionModal: View {
                     topTrailingRadius: 28
                 )
             )
-            .shadow(color: Color.navy.opacity(0.22), radius: 28, y: 14)
+            .shadow(color: Color.navy.opacity(appeared ? 0.22 : 0), radius: 28, y: 14)
             .padding(.horizontal, 28)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                    focused = true
-                }
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 28)
+            .scaleEffect(appeared ? 1 : 0.96)
+        }
+        .onAppear {
+            withAnimation(presentAnimation) {
+                appeared = true
             }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                focused = true
+            }
+        }
+    }
+
+    private func dismissModal(then action: @escaping () -> Void) {
+        focused = false
+        withAnimation(dismissAnimation) {
+            appeared = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+            action()
         }
     }
 }
@@ -1605,7 +1644,7 @@ struct FavoriteFolderDetail: View {
                             .padding(.top, 24)
                     }
                 }
-                .padding(.horizontal, 25)
+                .padding(.horizontal, ScreenMetrics.pagePadding)
                 .padding(.bottom, 28)
             }
             .scrollIndicators(.hidden)
@@ -1818,7 +1857,7 @@ private struct EmptyFavorites: View {
                 .foregroundStyle(Color.orangeBrand)
                 .padding(.top, 28)
         }
-        .frame(maxWidth: .infinity, minHeight: 520)
+        .frame(maxWidth: .infinity, minHeight: ScreenMetrics.layout == .compact ? 460 : 520)
     }
 }
 

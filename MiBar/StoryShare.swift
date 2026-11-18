@@ -162,6 +162,15 @@ struct WordSharePage: View {
     @State private var kind: ShareCardKind = .word
 
     private var copy: L10n { language.copy }
+    private var layout: PhoneLayout { ScreenMetrics.layout }
+    private var compact: Bool { layout == .compact }
+
+    private var cardWidth: CGFloat {
+        min(layout == .max ? 340 : 320, ScreenMetrics.width - (compact ? 36 : 48))
+    }
+
+    private var sectionSpacing: CGFloat { compact ? 10 : 16 }
+    private var horizontalPad: CGFloat { compact ? 20 : 28 }
 
     var body: some View {
         ZStack {
@@ -169,14 +178,14 @@ struct WordSharePage: View {
 
             Circle()
                 .fill(Color.white.opacity(0.06))
-                .frame(width: 320, height: 320)
+                .frame(width: compact ? 260 : 320, height: compact ? 260 : 320)
                 .blur(radius: 60)
                 .offset(x: -100, y: -180)
                 .allowsHitTesting(false)
 
             Circle()
                 .fill(Color.orangeBrand.opacity(0.16))
-                .frame(width: 280, height: 280)
+                .frame(width: compact ? 220 : 280, height: compact ? 220 : 280)
                 .blur(radius: 70)
                 .offset(x: 120, y: 280)
                 .allowsHitTesting(false)
@@ -184,59 +193,43 @@ struct WordSharePage: View {
             VStack(spacing: 0) {
                 header
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 18) {
+                GeometryReader { geo in
+                    let controlsBudget: CGFloat = compact ? 150 : 180
+                    let carouselHeight = min(
+                        layout == .max ? 420 : (layout == .plus ? 370 : 318),
+                        max(268, geo.size.height - controlsBudget)
+                    )
+
+                    VStack(spacing: sectionSpacing) {
                         Text(copy.shareYourWord)
-                            .font(MiBarFont.ui(size: 11, weight: .medium))
+                            .font(MiBarFont.ui(size: compact ? 10 : 11, weight: .medium))
                             .tracking(1.8)
                             .textCase(.uppercase)
                             .foregroundStyle(Color.white.opacity(0.45))
                             .frame(maxWidth: .infinity)
-                            .padding(.top, 8)
+                            .padding(.top, compact ? 4 : 6)
 
-                        cardCarousel
-                            .padding(.top, 4)
+                        cardCarousel(height: carouselHeight)
 
                         kindDots
 
                         stylePicker
-                            .padding(.horizontal, 28)
-                            .padding(.top, 6)
+                            .padding(.horizontal, horizontalPad)
 
                         Text(copy.shareLookHint)
-                            .font(MiBarFont.ui(size: 13))
+                            .font(MiBarFont.ui(size: compact ? 12 : 13))
                             .foregroundStyle(Color.white.opacity(0.4))
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.9)
+                            .padding(.horizontal, horizontalPad)
+
+                        Spacer(minLength: 0)
                     }
-                    .padding(.bottom, 24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
 
-                Button {
-                    InstagramStoriesShare.share(
-                        word: word,
-                        language: language,
-                        style: style,
-                        kind: kind,
-                        wordsCompleted: wordsCompleted
-                    )
-                } label: {
-                    HStack(spacing: 10) {
-                        Text(copy.shareToInstagram)
-                            .font(MiBarFont.ui(size: 15, weight: .semibold))
-                        MiBarIconView(name: .arrow, size: 16)
-                            .opacity(0.75)
-                    }
-                    .foregroundStyle(Color.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.orangeBrand)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-                .buttonStyle(MiBarPressStyle())
-                .padding(.horizontal, 24)
-                .padding(.bottom, 36)
-                .accessibilityLabel(copy.shareToInstagram)
+                shareButton
             }
         }
     }
@@ -259,25 +252,71 @@ struct WordSharePage: View {
                 Spacer()
             }
 
-            MiBarAppLogo(textSize: 18, horizontal: 16, vertical: 8, corner: 12)
+            MiBarAppLogo(
+                textSize: compact ? 15 : 18,
+                horizontal: compact ? 12 : 16,
+                vertical: compact ? 6 : 8,
+                corner: compact ? 10 : 12
+            )
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.top, compact ? 6 : 12)
+        .padding(.bottom, compact ? 12 : 14)
     }
 
-    private var cardCarousel: some View {
-        TabView(selection: $kind) {
-            WordStoryShareCard(word: word, language: language, style: style)
-                .frame(maxWidth: .infinity)
-                .tag(ShareCardKind.word)
+    private var shareButton: some View {
+        Button {
+            InstagramStoriesShare.share(
+                word: word,
+                language: language,
+                style: style,
+                kind: kind,
+                wordsCompleted: wordsCompleted
+            )
+        } label: {
+            HStack(spacing: 10) {
+                Text(copy.shareToInstagram)
+                    .font(MiBarFont.ui(size: compact ? 14 : 15, weight: .semibold))
+                MiBarIconView(name: .arrow, size: 16)
+                    .opacity(0.75)
+            }
+            .foregroundStyle(Color.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, compact ? 14 : 16)
+            .background(Color.orangeBrand)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(MiBarPressStyle())
+        .padding(.horizontal, compact ? 20 : 24)
+        .padding(.top, compact ? 8 : 10)
+        .padding(.bottom, compact ? 12 : 20)
+        .accessibilityLabel(copy.shareToInstagram)
+    }
 
-            WordsProgressShareCard(wordsCompleted: wordsCompleted, language: language, style: style)
-                .frame(maxWidth: .infinity)
-                .tag(ShareCardKind.progress)
+    private func cardCarousel(height: CGFloat) -> some View {
+        TabView(selection: $kind) {
+            WordStoryShareCard(
+                word: word,
+                language: language,
+                style: style,
+                cardWidth: cardWidth,
+                compact: compact
+            )
+            .frame(maxWidth: .infinity)
+            .tag(ShareCardKind.word)
+
+            WordsProgressShareCard(
+                wordsCompleted: wordsCompleted,
+                language: language,
+                style: style,
+                cardWidth: cardWidth,
+                compact: compact
+            )
+            .frame(maxWidth: .infinity)
+            .tag(ShareCardKind.progress)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        .frame(height: 420)
+        .frame(height: height)
         .animation(.easeInOut(duration: 0.2), value: style)
     }
 
@@ -295,14 +334,14 @@ struct WordSharePage: View {
     }
 
     private var stylePicker: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: compact ? 7 : 10) {
             Text(copy.look)
                 .font(MiBarFont.ui(size: 10, weight: .bold))
                 .tracking(1.4)
                 .textCase(.uppercase)
                 .foregroundStyle(Color.white.opacity(0.4))
 
-            HStack(spacing: 8) {
+            HStack(spacing: compact ? 6 : 8) {
                 ForEach(ShareStoryStyle.allCases) { option in
                     let selected = style == option
                     Button {
@@ -311,10 +350,10 @@ struct WordSharePage: View {
                         }
                     } label: {
                         Text(option.localizedName(for: language))
-                            .font(MiBarFont.ui(size: 13, weight: selected ? .semibold : .medium))
+                            .font(MiBarFont.ui(size: compact ? 12 : 13, weight: selected ? .semibold : .medium))
                             .foregroundStyle(selected ? Color.navy : Color.navy.opacity(0.45))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 11)
+                            .padding(.vertical, compact ? 9 : 11)
                             .background {
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .fill(Color.white)
@@ -339,14 +378,16 @@ struct WordSharePage: View {
 
 private struct ShareCardChrome<Content: View>: View {
     var style: ShareStoryStyle
+    var cardWidth: CGFloat = 340
+    var compact: Bool = false
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         content()
-            .padding(.horizontal, 26)
-            .padding(.top, 20)
-            .padding(.bottom, 24)
-            .frame(width: 340)
+            .padding(.horizontal, compact ? 18 : 26)
+            .padding(.top, compact ? 14 : 20)
+            .padding(.bottom, compact ? 16 : 24)
+            .frame(width: cardWidth)
             .background { cardBackground }
     }
 
@@ -445,31 +486,40 @@ struct WordStoryShareCard: View {
     var word: Word
     var language: AppLanguage
     var style: ShareStoryStyle = .classic
+    var cardWidth: CGFloat = 340
+    var compact: Bool = false
 
     private var copy: L10n { language.copy }
     private var palette: ShareCardPalette { ShareCardPalette(style: style) }
 
     private var wordSize: CGFloat {
-        if word.armenian.count >= 14 { return 34 }
-        if word.armenian.count >= 10 { return 40 }
-        if word.armenian.count >= 7 { return 46 }
-        return 52
+        let base: CGFloat
+        if word.armenian.count >= 14 { base = 34 }
+        else if word.armenian.count >= 10 { base = 40 }
+        else if word.armenian.count >= 7 { base = 46 }
+        else { base = 52 }
+        return compact ? base * 0.88 : base
     }
 
     var body: some View {
-        ShareCardChrome(style: style) {
+        ShareCardChrome(style: style, cardWidth: cardWidth, compact: compact) {
             VStack(spacing: 0) {
                 HStack {
-                    MiBarAppLogo(textSize: 14, horizontal: 12, vertical: 6, corner: 8)
+                    MiBarAppLogo(
+                        textSize: compact ? 12 : 14,
+                        horizontal: compact ? 10 : 12,
+                        vertical: compact ? 5 : 6,
+                        corner: 8
+                    )
                     Spacer(minLength: 0)
                 }
-                .padding(.bottom, 20)
+                .padding(.bottom, compact ? 12 : 20)
 
                 Text(copy.wordOfTheDay.uppercased())
-                    .font(MiBarFont.ui(size: 11, weight: .bold))
+                    .font(MiBarFont.ui(size: compact ? 10 : 11, weight: .bold))
                     .tracking(1.6)
                     .foregroundStyle(palette.kicker)
-                    .padding(.bottom, 14)
+                    .padding(.bottom, compact ? 10 : 14)
 
                 AdaptiveArmenianWord(
                     text: word.armenian,
@@ -479,37 +529,39 @@ struct WordStoryShareCard: View {
                     minScale: 0.28,
                     alignment: .center
                 )
-                .padding(.bottom, 10)
+                .padding(.bottom, compact ? 6 : 10)
 
                 Text("[\(word.transliteration)]")
-                    .font(MiBarFont.ui(size: 16, italic: true, editorial: true))
+                    .font(MiBarFont.ui(size: compact ? 14 : 16, italic: true, editorial: true))
                     .foregroundStyle(palette.meta)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, compact ? 5 : 8)
 
                 Text(word.gloss(for: language))
-                    .font(MiBarFont.ui(size: 15, weight: .medium))
+                    .font(MiBarFont.ui(size: compact ? 13 : 15, weight: .medium))
                     .foregroundStyle(palette.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.bottom, 18)
+                    .padding(.bottom, compact ? 12 : 18)
 
                 Rectangle()
                     .fill(palette.divider)
                     .frame(height: 1)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, compact ? 10 : 16)
 
                 Text(word.phrase)
-                    .font(MiBarFont.ui(size: 15, weight: .semibold, editorial: true))
+                    .font(MiBarFont.ui(size: compact ? 13 : 15, weight: .semibold, editorial: true))
                     .foregroundStyle(palette.primary)
                     .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 8)
+                    .lineSpacing(2)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.85)
+                    .padding(.bottom, compact ? 5 : 8)
 
                 Text(word.phraseTranslation(for: language))
-                    .font(MiBarFont.ui(size: 13, weight: .medium))
+                    .font(MiBarFont.ui(size: compact ? 12 : 13, weight: .medium))
                     .foregroundStyle(palette.secondary.opacity(0.9))
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
             }
         }
     }
@@ -521,49 +573,57 @@ struct WordsProgressShareCard: View {
     var wordsCompleted: Int
     var language: AppLanguage
     var style: ShareStoryStyle = .classic
+    var cardWidth: CGFloat = 340
+    var compact: Bool = false
 
     private var copy: L10n { language.copy }
     private var palette: ShareCardPalette { ShareCardPalette(style: style) }
 
     var body: some View {
-        ShareCardChrome(style: style) {
+        ShareCardChrome(style: style, cardWidth: cardWidth, compact: compact) {
             VStack(spacing: 0) {
                 HStack {
-                    MiBarAppLogo(textSize: 14, horizontal: 12, vertical: 6, corner: 8)
+                    MiBarAppLogo(
+                        textSize: compact ? 12 : 14,
+                        horizontal: compact ? 10 : 12,
+                        vertical: compact ? 5 : 6,
+                        corner: 8
+                    )
                     Spacer(minLength: 0)
                 }
-                .padding(.bottom, 28)
+                .padding(.bottom, compact ? 16 : 28)
 
                 Text(copy.wordsCompletedTitle.uppercased())
-                    .font(MiBarFont.ui(size: 11, weight: .bold))
+                    .font(MiBarFont.ui(size: compact ? 10 : 11, weight: .bold))
                     .tracking(1.6)
                     .foregroundStyle(palette.kicker)
-                    .padding(.bottom, 22)
+                    .padding(.bottom, compact ? 14 : 22)
 
                 Text("\(wordsCompleted)")
-                    .font(MiBarFont.ui(size: 88, weight: .bold, editorial: true))
+                    .font(MiBarFont.ui(size: compact ? 68 : 88, weight: .bold, editorial: true))
                     .tracking(-2.4)
                     .foregroundStyle(palette.primary)
                     .monospacedDigit()
                     .padding(.bottom, 6)
 
                 Text(copy.wordsCompletedUnit(wordsCompleted))
-                    .font(MiBarFont.ui(size: 20, weight: .semibold))
+                    .font(MiBarFont.ui(size: compact ? 17 : 20, weight: .semibold))
                     .foregroundStyle(palette.meta)
-                    .padding(.bottom, 22)
+                    .padding(.bottom, compact ? 14 : 22)
 
                 Rectangle()
                     .fill(palette.divider)
                     .frame(height: 1)
-                    .padding(.bottom, 18)
+                    .padding(.bottom, compact ? 12 : 18)
 
                 Text(copy.wordsCompletedFootnote)
-                    .font(MiBarFont.ui(size: 15, weight: .medium, editorial: true))
+                    .font(MiBarFont.ui(size: compact ? 13 : 15, weight: .medium, editorial: true))
                     .foregroundStyle(palette.secondary)
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.85)
             }
-            .frame(minHeight: 280, alignment: .top)
+            .frame(minHeight: compact ? 220 : 280, alignment: .top)
         }
     }
 }

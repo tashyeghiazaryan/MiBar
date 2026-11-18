@@ -14,11 +14,15 @@ The main shell SHALL provide tabs Today, All words, and Favorites with labels lo
 - **THEN** each tab shows its own page content and the tab bar labels match the UI language
 
 ### Requirement: All words archive
-All words SHALL list catalog entries with day number, Armenian lemma, glosses ordered for the UI language, today badge for the current word, and save toggles.
+All words SHALL list catalog entries with day number, Armenian lemma, transliteration in brackets, glosses ordered for the UI language, today badge for the current word, and save toggles.
 
 #### Scenario: Open archive
 - **WHEN** the user opens the All words tab
 - **THEN** the catalog list is shown with a localized title and a today badge on the current word
+
+#### Scenario: Row shows transliteration
+- **WHEN** an archive row is visible
+- **THEN** under the Armenian lemma the row shows `[transliteration]` then the gloss
 
 ### Requirement: Favorites collections
 Favorites SHALL let the user create named collections (folders). Collections SHALL appear as compact square cards. Creating a collection SHALL ask for a name.
@@ -61,8 +65,8 @@ Favorite word cards SHALL show transliteration in brackets in a smaller italic s
 - **THEN** the line under the Armenian lemma shows `[transliteration]` then the gloss for the UI language
 
 ### Requirement: Detail from archive or favorites
-Opening a word from All words or Favorites SHALL show a detail view of that word with a back action to the list.
+Opening a word from All words or Favorites SHALL show a detail view of that word with a back action to the list. Returning from All words detail SHALL restore the archive scroll position so the opened word remains in view.
 
 #### Scenario: Open detail and go back
 - **WHEN** the user opens a word from All words and taps back
-- **THEN** the archive list is shown again
+- **THEN** the archive list is shown again at the same scroll position as before opening

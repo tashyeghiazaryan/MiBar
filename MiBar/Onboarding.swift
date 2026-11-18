@@ -278,33 +278,32 @@ struct WelcomeScreen: View {
     var onSignUp: () -> Void
     var onLogIn: () -> Void
 
-    private var isCompact: Bool { ScreenMetrics.isCompactPhone }
+    private var layout: PhoneLayout { ScreenMetrics.layout }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             BrandMark(showMark: false, leading: true)
 
             LetterConstellation()
-                .frame(height: isCompact ? 165 : 180)
-                .padding(.top, isCompact ? 16 : 18)
+                .frame(height: ScreenMetrics.constellationHeight)
+                .padding(.top, layout == .compact ? 16 : 20)
                 .padding(.bottom, 8)
 
-            Spacer(minLength: isCompact ? 36 : 52)
+            Spacer(minLength: layout == .compact ? 24 : (layout == .plus ? 32 : 40))
 
             Text("One Armenian word\nevery day.")
-                .font(MiBarFont.ui(size: 32, editorial: true))
+                .font(MiBarFont.ui(size: ScreenMetrics.welcomeHeadline, editorial: true))
                 .tracking(-1.0)
                 .lineSpacing(-2)
                 .foregroundStyle(Color.black)
 
             Text("Discover Armenian in the app or right from your Home Screen widget.")
-                .font(MiBarFont.ui(size: 14))
+                .font(MiBarFont.ui(size: layout == .max ? 15 : 14))
                 .foregroundStyle(Color.brandBlue)
                 .lineSpacing(5)
-                .padding(.top, isCompact ? 16 : 18)
+                .padding(.top, layout == .compact ? 16 : 18)
+                .padding(.bottom, layout == .compact ? 20 : 26)
                 .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 24)
 
             PrimaryButton(title: "Sign Up") {
                 onSignUp()
@@ -329,8 +328,8 @@ struct WelcomeScreen: View {
 
             Spacer(minLength: 20)
         }
-        .padding(.horizontal, 30)
-        .padding(.top, isCompact ? 24 : 28)
+        .padding(.horizontal, ScreenMetrics.onboardingPadding)
+        .padding(.top, layout == .compact ? 24 : 28)
         .padding(.bottom, 26)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.paper.ignoresSafeArea())
@@ -357,19 +356,16 @@ struct EmailScreen: View {
     }
 
     private var isKeyboardVisible: Bool { keyboardHeight > 0 }
-    /// Current spacing tuned for 16 Plus / Pro Max; compact = 16 / 16 Pro.
-    private var isCompact: Bool { ScreenMetrics.isCompactPhone }
+    private var layout: PhoneLayout { ScreenMetrics.layout }
+    private var isCompact: Bool { layout == .compact }
 
     private var constellationHeight: CGFloat {
-        if isKeyboardVisible {
-            return isCompact ? 88 : 140
-        }
-        return isCompact ? 165 : 180
+        isKeyboardVisible ? ScreenMetrics.constellationHeightKeyboard : ScreenMetrics.constellationHeight
     }
 
     private var constellationTop: CGFloat {
         if isKeyboardVisible { return isCompact ? 8 : 12 }
-        return isCompact ? 16 : 18
+        return layout == .max ? 20 : (isCompact ? 16 : 18)
     }
 
     private var constellationBottom: CGFloat {
@@ -379,7 +375,11 @@ struct EmailScreen: View {
 
     private var formBlockTop: CGFloat {
         guard !isKeyboardVisible else { return 0 }
-        return isCompact ? 58 : 72
+        switch layout {
+        case .compact: return 58
+        case .plus: return 72
+        case .max: return 84
+        }
     }
 
     private var subtitleTop: CGFloat {
@@ -389,7 +389,11 @@ struct EmailScreen: View {
 
     private var emailFieldTop: CGFloat {
         if isKeyboardVisible { return isCompact ? 18 : 24 }
-        return isCompact ? 32 : 36
+        switch layout {
+        case .compact: return 32
+        case .plus: return 36
+        case .max: return 40
+        }
     }
 
     private var contentTop: CGFloat {
@@ -420,7 +424,7 @@ struct EmailScreen: View {
 
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Create your account")
-                            .font(MiBarFont.ui(size: isCompact && isKeyboardVisible ? 28 : 32, editorial: true))
+                            .font(MiBarFont.ui(size: isCompact && isKeyboardVisible ? 28 : ScreenMetrics.welcomeHeadline, editorial: true))
                             .tracking(-1.0)
                             .lineSpacing(-2)
                             .foregroundStyle(Color.black)
@@ -469,7 +473,7 @@ struct EmailScreen: View {
                     }
                     .padding(.top, formBlockTop)
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, ScreenMetrics.onboardingPadding)
                 .padding(.top, contentTop)
                 .padding(.bottom, 26)
                 .frame(maxWidth: .infinity)
@@ -496,7 +500,7 @@ struct EmailScreen: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
             guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-            let screenHeight = UIScreen.main.bounds.height
+            let screenHeight = ScreenMetrics.height
             keyboardHeight = frame.origin.y >= screenHeight - 1
                 ? 0
                 : max(0, screenHeight - frame.origin.y)
@@ -638,18 +642,16 @@ struct LoginScreen: View {
     }
 
     private var isKeyboardVisible: Bool { keyboardHeight > 0 }
-    private var isCompact: Bool { ScreenMetrics.isCompactPhone }
+    private var layout: PhoneLayout { ScreenMetrics.layout }
+    private var isCompact: Bool { layout == .compact }
 
     private var constellationHeight: CGFloat {
-        if isKeyboardVisible {
-            return isCompact ? 88 : 140
-        }
-        return isCompact ? 165 : 180
+        isKeyboardVisible ? ScreenMetrics.constellationHeightKeyboard : ScreenMetrics.constellationHeight
     }
 
     private var constellationTop: CGFloat {
         if isKeyboardVisible { return isCompact ? 8 : 12 }
-        return isCompact ? 16 : 18
+        return layout == .max ? 20 : (isCompact ? 16 : 18)
     }
 
     private var constellationBottom: CGFloat {
@@ -659,7 +661,11 @@ struct LoginScreen: View {
 
     private var formBlockTop: CGFloat {
         guard !isKeyboardVisible else { return 0 }
-        return isCompact ? 58 : 72
+        switch layout {
+        case .compact: return 58
+        case .plus: return 72
+        case .max: return 84
+        }
     }
 
     private var subtitleTop: CGFloat {
@@ -669,7 +675,11 @@ struct LoginScreen: View {
 
     private var emailFieldTop: CGFloat {
         if isKeyboardVisible { return isCompact ? 18 : 24 }
-        return isCompact ? 32 : 36
+        switch layout {
+        case .compact: return 32
+        case .plus: return 36
+        case .max: return 40
+        }
     }
 
     private var contentTop: CGFloat {
@@ -706,7 +716,7 @@ struct LoginScreen: View {
 
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Welcome back")
-                            .font(MiBarFont.ui(size: isCompact && isKeyboardVisible ? 28 : 32, editorial: true))
+                            .font(MiBarFont.ui(size: isCompact && isKeyboardVisible ? 28 : ScreenMetrics.welcomeHeadline, editorial: true))
                             .tracking(-1.0)
                             .lineSpacing(-2)
                             .foregroundStyle(Color.black)
@@ -755,7 +765,7 @@ struct LoginScreen: View {
                     }
                     .padding(.top, formBlockTop)
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, ScreenMetrics.onboardingPadding)
                 .padding(.top, contentTop)
                 .padding(.bottom, 26)
                 .frame(maxWidth: .infinity)
@@ -777,7 +787,7 @@ struct LoginScreen: View {
         .animation(.easeOut(duration: 0.25), value: keyboardHeight)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
             guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-            let screenHeight = UIScreen.main.bounds.height
+            let screenHeight = ScreenMetrics.height
             keyboardHeight = frame.origin.y >= screenHeight - 1
                 ? 0
                 : max(0, screenHeight - frame.origin.y)
@@ -858,6 +868,7 @@ struct OtpScreen: View {
     @State private var resent = false
     @State private var shakeToken: CGFloat = 0
     @State private var verifyTicket = UUID()
+    @State private var keyboardHeight: CGFloat = 0
     @FocusState private var focused: Bool
 
     private enum Status { case idle, loading, error, success }
@@ -877,84 +888,127 @@ struct OtpScreen: View {
         min(code.count, 3)
     }
 
+    private var isKeyboardVisible: Bool { keyboardHeight > 0 }
+    private var compact: Bool { ScreenMetrics.isCompactPhone }
+
+    private var contentTop: CGFloat {
+        if isKeyboardVisible { return compact ? 20 : 28 }
+        return 64
+    }
+
+    private var otpTop: CGFloat {
+        if isKeyboardVisible { return compact ? 22 : 28 }
+        return 42
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                HStack {
-                    IconButton(icon: .back) {
-                        focused = false
-                        onBack()
-                    }
-                    Spacer()
-                    BrandMark(compact: true, showMark: false)
-                    Spacer()
-                    Color.clear.frame(width: 42, height: 42)
-                }
-                .padding(.top, 4)
-
+        ScrollViewReader { proxy in
+            ScrollView {
                 VStack(spacing: 0) {
-                    Kicker(text: "Almost there", color: .brandBlue)
-                    Text("Check your inbox")
-                        .font(MiBarFont.ui(size: 37, editorial: true))
-                        .tracking(-1.48)
-                        .foregroundStyle(Color.black)
+                    HStack {
+                        IconButton(icon: .back) {
+                            focused = false
+                            onBack()
+                        }
+                        Spacer()
+                        BrandMark(compact: true, showMark: false)
+                        Spacer()
+                        Color.clear.frame(width: 42, height: 42)
+                    }
+                    .padding(.top, 4)
+
+                    VStack(spacing: 0) {
+                        Kicker(text: "Almost there", color: .brandBlue)
+                        Text("Check your inbox")
+                            .font(MiBarFont.ui(size: isKeyboardVisible && compact ? 32 : 37, editorial: true))
+                            .tracking(-1.48)
+                            .foregroundStyle(Color.black)
+                            .padding(.top, 9)
+                        (
+                            Text("We sent a four-digit code to\n")
+                            + Text(inboxLabel).fontWeight(.semibold)
+                        )
+                        .font(MiBarFont.ui(size: 14))
+                        .foregroundStyle(Color.inkSoft)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(6)
+                        .padding(.top, isKeyboardVisible ? 12 : 18)
+
+                        Button(action: onBack) {
+                            Text("Change email")
+                                .font(MiBarFont.ui(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.brandBlue)
+                        }
+                        .buttonStyle(MiBarPressStyle())
                         .padding(.top, 9)
-                    (
-                        Text("We sent a four-digit code to\n")
-                        + Text(inboxLabel).fontWeight(.semibold)
-                    )
-                    .font(MiBarFont.ui(size: 14))
-                    .foregroundStyle(Color.inkSoft)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(6)
-                    .padding(.top, 18)
 
-                    Button(action: onBack) {
-                        Text("Change email")
-                            .font(MiBarFont.ui(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.brandBlue)
+                        otpField
+                            .padding(.top, otpTop)
+                            .modifier(ShakeEffect(shakes: shakeToken))
+
+                        statusView
+                            .frame(minHeight: isKeyboardVisible ? 28 : 40)
+                            .padding(.top, isKeyboardVisible ? 8 : 15)
+
+                        PrimaryButton(
+                            title: "Continue",
+                            isLoading: status == .loading,
+                            disabled: code.count < 4 || status == .success
+                        ) {
+                            focused = false
+                            verify(code)
+                        }
+                        .padding(.top, 8)
+
+                        Button(action: resend) {
+                            Text(resent ? "New code sent" : "Send code again")
+                                .font(MiBarFont.ui(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.brandBlue)
+                                .opacity(resent ? 0.7 : 1)
+                        }
+                        .buttonStyle(MiBarPressStyle())
+                        .disabled(resent || status == .loading || status == .success)
+                        .padding(.top, 14)
+                        .id("resendButton")
                     }
-                    .buttonStyle(MiBarPressStyle())
-                    .padding(.top, 9)
-
-                    otpField
-                        .padding(.top, 42)
-                        .modifier(ShakeEffect(shakes: shakeToken))
-
-                    statusView
-                        .frame(minHeight: 40)
-                        .padding(.top, 15)
-
-                    PrimaryButton(
-                        title: "Continue",
-                        isLoading: status == .loading,
-                        disabled: code.count < 4 || status == .success
-                    ) {
-                        focused = false
-                        verify(code)
-                    }
-                    .padding(.top, 8)
-
-                    Button(action: resend) {
-                        Text(resent ? "New code sent" : "Send code again")
-                            .font(MiBarFont.ui(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.brandBlue)
-                            .opacity(resent ? 0.7 : 1)
-                    }
-                    .buttonStyle(MiBarPressStyle())
-                    .disabled(resent || status == .loading || status == .success)
-                    .padding(.top, 14)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, contentTop)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 64)
+                .padding(.horizontal, ScreenMetrics.onboardingPadding)
+                .padding(.bottom, 28)
             }
-            .padding(.horizontal, 25)
-            .padding(.bottom, 28)
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+            .scrollIndicators(.hidden)
+            .onChange(of: keyboardHeight) { _, height in
+                guard height > 0 else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    withAnimation(.easeOut(duration: 0.28)) {
+                        proxy.scrollTo("resendButton", anchor: .bottom)
+                    }
+                }
+            }
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .scrollDismissesKeyboard(.interactively)
         .background(Color.paper.ignoresSafeArea())
+        .padding(.bottom, keyboardHeight)
+        .ignoresSafeArea(.keyboard)
+        .animation(.easeOut(duration: 0.25), value: keyboardHeight)
         .animation(.easeInOut(duration: 0.22), value: focused)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                focused = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            let screenHeight = ScreenMetrics.height
+            keyboardHeight = frame.origin.y >= screenHeight - 1
+                ? 0
+                : max(0, screenHeight - frame.origin.y)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardHeight = 0
+        }
     }
 
     private var otpField: some View {
@@ -1164,10 +1218,10 @@ struct LanguageScreen: View {
                 onContinue(selected)
             }
         }
-        .padding(.horizontal, 30)
+        .padding(.horizontal, ScreenMetrics.onboardingPadding)
         .padding(.top, 12)
         .padding(.bottom, 26)
-        .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height - 80, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: ScreenMetrics.height - 80, alignment: .top)
         .background(Color.paper)
         .background(Color.paper.ignoresSafeArea())
     }
